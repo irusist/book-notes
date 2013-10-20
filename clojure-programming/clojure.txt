@@ -1,0 +1,856 @@
+Chas Emerick
+http://www.clojureatlas.com/
+http://cemerick.com
+
+Brian Carper
+https://github.com/briancarper/gaka
+https://github.com/briancarper/oyako
+http://briancarper.net/
+
+Christophe Grand
+https://github.com/cgrand/enlive
+https://github.com/cgrand/parsley
+https://github.com/cgrand/moustache
+http://clj-me.cgrand.net/
+
+http://shop.oreilly.com/product/0636920013754.do
+
+源码：https://github.com/clojurebook/ClojureProgramming
+
+java -cp clojure-1.4.0.jar clojure.main
+java -jar clojure.jar
+
+抽象语法树：
+http://en.wikipedia.org/wiki/Abstract_syntax_tree
+http://en.wikipedia.org/wiki/Parse_tree
+
+
+api:                            http://clojure.github.com/clojure
+邮件列表：                       http://groups.google.com/group/clojure
+FreeNode IRC频道#clojure:        http://webchat.freenode.net/?channels=#clojure
+                                http://clojurebook.com
+
+Clojure Reader：
+(read-string "42")
+;= 42
+(read-string "(+ 1 2)")
+;= (+ 1 2)
+(pr-str [1 2 3])
+;= "[ 2 3]"
+(read-string "[1 2 3]")
+;= [1 2 3]
+
+标量字面量：
+字符串：与java的相同，但支持多行，如：
+    "multiline strings
+    are very handy"
+    ;= "multiline strings\nare very handy"
+布尔值：与java一样，true，false
+nil：与java的null，python的None，ruby的nil一样
+字符：字符变量通过反斜杠加字符来表示：如(class \c)  ;= java.lang.Character
+    对于unicode编码和octal编码，可以使用对应的前缀：\u00ff, \o41 ;= \!
+    对一些特殊字符，也有相应的常量：\space, \newline, \formfeed, \return, \backspace, \tab
+关键字：关键字求值成它们自身，经常被当做访问器来获取它们对应的值，如下面的map集合record：
+    （def person {:name "Sandra Cruz" :city "Portland, ME")  ;= #'user/person
+     (:city person)  ;= "Portland, ME"
+     关键字本身是一个函数，它的作用就是查找它所对应的值
+     关键字始终以冒号开头，它可以包含任意的非空字符，如果关键字里包含/，表示这个关键字是命名空间限定的，如果一个关键字以两个冒号(::)开头的话，那么表示的是当前命名空间的关键字
+     如果一个关键字以两个冒号开头，同时又包含了/的话，比如::alias/kw，那么表示是某个特定命名空间里面的关键字
+
+     (name :user/location)   ;= "location"
+     (namespace :user/location)  ;= user
+     (namespace :location)  ;= nil
+
+符号：根关键字一样，符号也是一种标识符，符号的值是它所代表的clojure运行时里面的那个值，这个值可以是var所持有的值
+    (average [50 60 70 80 90]  ;= 70  这里的average就是一个符号，代表一个名为average的var所指向的函数
+    符号不能以数字开头，符号的名称不但可以包含数字，字符，还可以有* +　！ - _以及?等特殊字符
+    如果一个符号里面含有斜杠(/)，那么表示这个符号是命名空间限定的符号，而它所代表的值也会求值成这个符号在那个命名空间里面的值
+
+数字：
+    字面量语法                   数字类型
+    42,0xff，2r111,040          long（64位带符号整数）
+    3.14,6.0221415e23           double(IEEE标准的64位浮点数）
+    42N                         clojure.lang.BigInt(任意精度的整数），需要的时候，BigInt会被自动转换成java.math.BigInteger
+    0.01M                       java.math.BigDecimal(任意精度的浮点数）
+    22/7                        clojure.lang.Ratio
+    在任意一个数字前面加上一个横线（-)就变成了相对应的负数
+
+    十六进制：0xff表示255，0xd055表示53333
+    八进制：以0开头是八进制数字的表示法，如040表示32
+    任意进制：BrN，其中N是要表示的数字，B表示进制，如2r表示二进制的数字（2r111表示7），16r表示十六进制，最高支持36进制（由java.math.BigInteger造成)
+    任意精度的数字：
+    有理数：clojure.lang.Ratio
+
+正则表达式：以#开头的字符串被当做正则表达式
+    (class #"(p|h)ail")  ;= java.util.regex.Pattern
+    正则表达式不需要像在java那样反斜杠进行转义
+    re-seq  re-find re-matches
+
+注释：1:以分号(;)开头的单行注释，与java的//一致
+     2:form级别的注释： #_ 宏，这个宏告诉reader忽略下一个Clojure form。
+      (read-string "(+ 1 2 #_(* 2 2) 8)")   ;= (+ 1 2 8)
+     3:使用comment宏：comment里面可以包含任意数量的代码，根#_不同的是，comment里面的代码并没有被reader彻底忽略，
+     comment形式的返回值始终是nil。(+ 1 2 (comment (* 2 2)) 8)  ;= #<NullPointerException java.lang.NullPointerException>
+        (when true
+            (comment (println "hello")))   ;= nil
+
+空格和逗号： 在reader眼里，逗号就是空格:
+    (defn silly-adder [x y] (+ x y))与
+    (defn silly-adder [x, y] (+, x, y)一样
+
+集合字面量：  '(a b :name 12.5)   ;; list
+            ['a 'b :name 12.5]   ;; vector
+            {:name "Chas" :age 31}   ;; map
+            #{1 2 3}  ;; set
+
+
+reader的一些其他语法糖：
+    1：通过在一个form前面加上单引号(')可以使用这个form不被求值，
+    2：可以用#()语法来定义一个匿名函数，
+    3：虽然var本身会被求值成var所代表的值，我们可以通过在var的名字前加上#'来得到var的本身
+    4：可以在引用类型前面加上一个@符号来得到这个引用所指向的值。
+    5：reader给宏提供了三种特殊的语法：`, ~, ~@
+    6：与java操作:  .  new
+    7：所有数据结构和引用类型都支持元数据，同样的Clojure值，如果元数据不同，那么它们语义上是相同的。
+    元数据可以表明一个函数是不是私有的，表明一个函数的类型或一个函数的返回类型。
+    可以用^语法来给一个值添加元数据。
+
+命名空间：命名空间相当于java的package，python的module
+        clojure中的一种引用类型：var，是一种可修改的内存地址，从而可以保存任何值，
+        在var被定义的命名空间里，var和一个符号相关联，然后就可以通过这个符号来使用这个var，从而得到这个var的值
+        在clojure中，var是用special form def来定义的，def只作用于当前命名空间。（Clojure REPL启动时默认的命名空间始终是user）
+        (def x 1) ;= #'user/x
+        x ;= 1
+        重新定义符号x：(def x "Hello") ;= #'user/x
+        x ; "Hello"
+        全局var（在所在的命名空间中都可以访问，由def以及它的变种定义）只应该被全局的表达式定义，决不要在某个Clojure程序里的正常分支的函数里定义一个全局的var
+
+        *ns*  (当前命名空间始终会绑定到*ns*)  ;= #<Namespace user>
+        (ns foo)  ;= nil 创建命名空间foo，并切换到命名空间foo
+        *ns*  ;= #<Namespace foo>
+        user/x  ;= "Hello"
+        x ;= #<CompilerException java.lang.RuntimeException: Unable to resolve symbol : x in this context,
+        compiling:(NO_SOURCE_PATH:0)
+
+        java.lang这个包里面的类默认被引入到每个Clojure的命名空间中，任何指向Java类的符号都会被求值成那个Java类
+        String  ;= java.lang.String
+        Integer ;= java.lang.Integer
+        java.util.List  ;= java.util.List
+        java.net.Socket  ;= java.net.Socket
+        每个命名空间都会默认引入clojure.core中所有的var，比如clojure.core命名空间中定义了一个名为filter的函数，可以不指定命名空间直接访问filter
+
+符号求值：
+special form:
+        阻止求值：quote：
+            (quote x) ;= x
+            (symbol? (quote x)) ;= true
+            reader在求值到单引号的时候会把它解析成一个quote: 'x ;= x
+            任何Clojure form都可以被quote，包括数据结构，如果使用数据结构，返回的是数据结构本身（数据结构内的表达式将不作求值操作）；
+            '(+ x x)  ;= (+ x x)包含'+ 'x 'x
+            (list '+ 'x 'x)  ;= (+ x x)
+            (list? '(+ x x)) ;= true
+            ''x  ;= (quote x)
+            '@x  ;= (clojure.core/deref x)
+            '#(+ % %) ;= (fn* [p1__152#] (+ p1__152# p1__152#))
+            '`(a b ~c)  ;= (seq (concat (list (quote user/a)) (list (quote user/b)) (list c)))
+
+        代码块：do：do会依次求值传进来的所有表达式，并把最后一个表达式的结果作为返回值
+                很多其他的form，如fn let loop try defn以及这些form的变种都隐式得使用了do form，所以，可以在这些form中使用多个表达式
+        定义var：def：clojure中很多其他form都间接地创建或重定义，内部都是使用def来实现的，一般都以def开头：defn，defn-，defprotocol,defonce,defmacro等
+                并不是所有以def开头的函数都创建或重定义var，比如deftype, defrecord, defmethod
+        本地绑定let： 相当于java的局部变量：
+                (defn hypot
+                    [x y]
+                    (let [x2 (* x x)
+                          y2 (* y y)]
+                    (Math.sqrt (+ x2 y2))))
+
+                可以用_来表示不关心的值：如：
+                 (let [location (get-lat-long)
+                        _ (println "Current location：" location)]
+
+                 1：所有本地绑定都是不可变的，可以在一个嵌套的let形式里面把一个本地绑定到另外一个值，或者可以在一个绑定数组的后面把它绑定到别的值，但是没办法改变一个let绑定的值
+                    loop和recur这两个special form满足了每个循环都对本地值进行改变的需求
+                 2：let的绑定数组在编译期可以对通用集合类型进行解构
+                 解构：
+                     (def v [42 "foo" 99.2 [5 12]]
+                     (first v)  ;= 42
+                     (last v)  ;= [5 12]
+                     (second v) ;= "foo"
+                     (nth v 2)  ;= 99.2
+                     (v 2)      ;= 99.2
+                     (.get v 2)  ;= 99.2 所有的clojure顺序集合都实现了java.util.List接口
+                     (+ (first v) (first (last v)))  ;= 47 如果vector内有vector，则比较麻烦
+
+                     clojure的解构特性听歌了一种简洁的语法来声明地才从一个集合里面选取某些元素，并且把这些元素绑定到一个本地let绑定上去。
+                     因为解构这个特性是由let提供的，它可以在任何间接使用let的地方使用，比如fn,  defn,  loop
+
+                 顺序解构: 顺序解构可以对任何顺序集合进行解构，包括：
+                       1：clojure原生的list，vector以及seq
+                       2：任何实现了java.util.List接口的集合
+                       3：java数组
+                       4：字符串，对它解构的结果是一个个字符
+                       (def v [42 "foo" 99.2 [5 12]])
+                       (let [[x y z] v]
+                            (+ x z))     ;= 141.2  x对应v[0],y对应v[1],z对应v[2]
+                       (let [[x _ _ [y z]] v]
+                            (+ x y z))   ;= 59 解构支持嵌套
+
+                       保持剩下的元素：可以用&符号来保持解构剩下的那些元素：(let [[x & rest] v] rest)  ;= ("foo" 99.2 [5 12])
+                       这里的rest是一个序列。不是vector
+                       保持被解构的值：可以在解构形式中指定:as选项来把被解构的原始集合绑定到一个本地绑定：
+                            (let [[x _ z :as original-vector] v] (conj original-vector (+ x z)))
+                            ;= [42 "foo" 99.2 [5 12] 141.2]
+                 map解构：对下面几种数据结构有效
+                       1：Clojure原生的hash-map, array-map,以及记录类型
+                       2：任何实现了java.util.Map的对象
+                       3：get方法所支持的任何对象：比如：
+                            Clojure原生vector
+                            字符串
+                            数组
+                       (def m {:a 5 :b 6
+                               :c [7 8 9]
+                               :d {:e 10 :f 11}
+                               "foo" 88
+                               42 false})
+                       (let [{a :a b :b} m]
+                            (+ a b))           ;= 11
+                       可以在map解构中用作key的不止是关键字，可以是任何类型的值：如
+                       (let [{f "foo"} m] (+ f 12))  ;= 100
+                       (let [{v 42} m] (if v 1 0))   ;= 0
+                       如果map进行解构的是vector，字符串或者数组，那么解构key则是数字类型的数组下标。
+                       (let [{x 3 y 8} [12 0 0 -18 44 6 0 0 1]] (+ x y))   ;= -17
+                       map解构也可以也可以处理内嵌map：
+                       (let [{{e :e} :d} m] (* 2 e))   ;= 20
+                       可以把顺序解构和map解构结合起来：
+                       (let [{[x _ y] :c} m] (+ x y))   ;= 16
+                       map解构特点：
+                            1：保持被解构的集合。使用:as
+                                    (let [{r1 :x r2 :y as randoms}
+                                            (zipmap [:x :y :z] (repeatedly (partial rant-int 10)))]
+                                            (assoc randoms :sum (+r1 r2)))
+                            2：默认值，使用:or,如果要解构的key在集合中没有的话，那么默认map中的值会作为默认值绑定到我们的解构符号上去。
+                             (let [{k :unknown x :a :or {k 50}} m] (+ k x))  ;= 55
+                             (let [{k :unknown x :a} m k (or k 50)] (+ k x)) 比较复杂
+                             :or能够区分是有没有赋值，还是赋给的值就是逻辑false（nil或者false）
+                             (let [{opt1 :option} {:option false}
+                                    opt1 (or opt1 true)
+                                    {opt2 :option or {opts true}} {:option false}]
+                                    {:opt1 opt1 :opt2 opt2})  ;= {:opt1 true :opt2 false}
+                            3：绑定符号到map中同名关键字所对应的元素：:keys表示key的类型是关键字，:strs表示key的类型是字符串，:syms表示key的类型是符号
+                            (def chas {:name "Chas" :age 31 :location "Masasass"})
+                            (let [{:keys [name age location]} chas]
+                                (format "%s is %s years old and lives in %s." name age location))
+
+                            (def chas {"name" "Chas" "age" 31 "location" "Masasass"})
+                            (let [{:strs [name age location]} chas]
+                                (format "%s is %s years old and lives in %s." name age location))
+
+                            (def chas {'nam "Chas" 'age 31 'location "Masasass"})
+                            (let [{:syms [name age location]} chas]
+                                (format "%s is %s years old and lives in %s." name age location))
+
+                            3：对顺序集合的剩余部分使用map解构：如果剩余部分的个数是偶数的话，顺序解构会把剩余部分当做一个map来处理。
+                                (def user-info ["rebert8990" 2011 :name "Bob" :city "Boston"])
+                                (let [[username account-year & {:keys [name city]}] user-info]
+                                        (format "%s is in %s" name city))
+
+        定义函数：fn，fn本身也有与let和do类似的定义
+                (fn [x]   ;函数参数可以使用let解构的规则
+                    (+ 10 x))  ;函数体被隐含地包括在一个do形式中，所以函数体可以有任意多个形式，并且最后一个形式的值就是整个函数的返回值
+
+                函数定义时的参数与调用函数时实际传递的参数之间的对应是通过参数位置来完成的。
+                ((fn [x] (+ 10 x)) 8)   ;= 18
+                函数可以有多个参数列表，可以用一个var来保持函数的引用：
+                (def strange-adder (fn adder-self-reference   ; 可选的函数名字
+                                        ([x] (adder-self-reference x 1))  ; 每套参数-函数体要放在一个单独的括号内。
+                                        ([x y] (+ x y))))
+                (strange-adder 10)   ;= 11
+                (strange-adder 10 50)  ;= 60
+
+                用letfn来解决函数定义相互引用的问题：
+                    (letfn [(odd? [n]
+                                (even? (dec n)))
+                            (even? [n]
+                                (or (zero? n)
+                                    (odd? (dec n))))]
+                            (odd? 11))          ;=true
+                defn基于fn，封装了def和fn的宏
+                解构函数参数：
+                        可变函数参数：
+                            (defn concat-rest
+                                  [x & rest]
+                                  (apply str (butlast rest)))
+                            (concat-rest 0 1 2 3 4)  ;= "123"
+
+                            (defn make-user
+                                [& [user-id]]
+                                {:user-id (or user-id
+                                           (str (java.util.UUID/randomUUID)))})
+                            (make-user)
+                            (make-user "Bobby")
+                        关键字参数：函数使用者不必按照某个特定的顺序来传参
+                            (defn make-uer
+                                [username & {:keys [email join-date]
+                                             :or {join-date (java.util.Date.)}}]
+                                {:username username
+                                :join-date join-date
+                                :email email
+                                ;; 2.592e9 -> one month in ms
+                                :exp-date (java.util.Date. (long (+ 2.592e9 (.getTime join-date))))})
+                            (make-user "Bobby")
+                            ;= {:username "Bobby" :join-date #<Date Mon ..>
+                            ;= :email nil :exp-date #<Date Mon ..>}
+
+                            ; 其中username是固定位置，join-date和email不是固定位置
+                            (make-user "Bobby" :join-date (java.util.Date. 111 0 1) :email "Bobby@example.com")
+                        前置和后置条件：fn提供对函数参数和函数返回值进行检查的前置和后置条件，这个特性在单元测试和确保参数正确性方面非常有用
+                        函数字面量：
+                            (fn [x y] (Math/pow x y))
+                            #(Math/pow %1 %2)
+
+                            (read-string "#(Math/pow %1 %2)")
+                            fn和函数字面量的区别：
+                                1：函数字面量没有隐式地使用do
+                                    (fn [x y]
+                                        (println (str x \^ y))
+                                        (Math/pow x y))
+                                    需要写成以下形式：
+                                    #(do (println (str %1 \^ %2))
+                                         (Math/pow %1 %2))
+                                2：使用非命名的占位符号来指定函数的参数个数，%1表示第一个，%2表示第2个，可以用%来指定第一个参数，可以用%&来指定剩余参数
+                                    (fn [x & rest]
+                                        (- x (apply + rest)))等价于
+                                    #(- %1 (apply + %&))
+                                3：桉树字面量不能嵌套使用：
+                                    (fn [x]
+                                        (fn [y]
+                                            (+ x y))) ;这样可以
+                                    #(#(+ % %)) ; 这样不可以
+
+
+       条件判断：if：如果if的第一个表达式的值是逻辑true的话，那么整个if的值就是第2个表达式的值，否则if形式的值是第3个表达式的值。第2个和第3个表达式是按需求值的。
+                Clojure条件判断把任何非nil或非false的值都判断为true
+                (if (not true) \t)  ;= nil
+                如果一个表达式的值为false，但是if的else表达式没有提供的话，那么整个if的值就nil
+
+                if判断条件的宏：
+                when：如果向在条件判断为false的时候返回nil（或者什么动作都不做），那么最好使用when
+                cond：根java的else if类似，它使得可以简洁地指定多个条件判断语句，如果满足则分别返回各自对应表达式的值
+                if-let,when-let，如果判断条件是true的话，则if形式的值则绑定到这个本地绑定
+
+                true?和false?与if判断没有关系(true? "string")   ;= false   (if "string" \t \f)  ;= \t
+                true?和false?检查所给的参数是不是布尔值true和false，而不是逻辑意义上的true和false。逻辑意义上的true和下面等价：
+                (or (not (nil? x)) (true? x)))
+
+       循环：loop和recur：doseq和dotimes建立在recur基础上，recur能够在不消耗堆栈空间的情况下把程序执行转到离本地上下文最近的loop头那里，这个loop头可以是loop定义的，也可以是一个函数定义的
+               (loop [x 5]
+                  (if (neg? x)
+                    x
+                    (recur (dec x))))   ;= -1
+               loop通过一个隐式的let来定义绑定，所以它接受一个绑定数组，根let类似
+               如果loop形式的最后一个表达式产生一个值，那么这个值将作为loop形式的值
+               recur形式会把程序执行的控制权转移到上下文里面最近的loop头去
+
+               函数也可以建立loop头，如果是函数建立loop的话，那么recur所带的值则会绑定到函数的参数上面去。
+               (defn countdown
+                    [x]
+                    (if (zero? x)
+                        :blastoff!
+                        (do (println x)
+                            (recur (dec x)))))
+               (countdown 5)
+               ; 5
+               ; 4
+               ; 3
+               ; 2
+               ; 1
+               ;= blashoff!
+
+               可以使用doseq或dotimes来完成循环
+               如果要遍历一个集合或列表，map,reduce,for这些函数比recur更方便
+
+                因为recur不消耗堆栈空间（避免了堆栈异常错误），可用于实现某些递归的算法，由于它不对数字自动进行装箱操作，操作数字的时候性能好，对于实现一些跟数学和数据相关的操作非常有用
+                如果要累积或消费一个集合或一堆集合，可以用recur
+       引用var：var ,可用var form或#'
+                (def x 5)  ;= #'user/x
+                (var x)   ;= #'user/x
+                #'x       ;= #'user/x
+
+和java互操作：.和new
+    操作              java代码                              clojure语法糖                       特殊形式写法
+    对象初始化         new java.util.ArrayList(100)       (java.util.ArrayList. 100)         (new java.util.ArrayList 100)
+    调用静态方法       Math.pow(2, 10)                    (Math/pow 2 10)                     (. Math/pow 2 10)
+   调用实例方法        "hello".substring(1, 3)            (.substring "hello" 1 3)            (. "hello" substring 1 3)
+   访问静态成员变量     Integer.MAX_VALUE                   Integer/MAX_VALUE                   (. Integer MAX_VALUE)
+   访问实例成员变量   someObject.someField                  (.someField someObject)             (. someObject someField)
+
+异常处理：try和throw
+
+状态修改：set!
+    1：设置哪些没有根绑定（root binding)的线程本地值
+    2：设置一个java的字段
+    3：设置deftype定义的对象的可修改字段。
+
+锁：monitor-enter,monitor-exit，可以使用宏locking
+
+eval：接受一个形式作为参数
+    (eval :foo)  ;= :foo
+    (eval [1 2 3])  ;= [1 2 3]
+    (eval "text")  ;= "text"
+    一个列表会被eval求值成它所表示的函数调用的返回值
+    (eval '(average [50 10 20 430]))
+
+
+REPL: read-string eval recur I/O函数
+
+
+可变对象：http://www.ibm.com/developerworks/java/library/j-jtp02183/index.html
+双重校验锁：http://www.cs.umd.edu/~pugh/java/memoryModel/DoubleCheckedLocking.html
+
+
+http://en.wikipedia.org/wiki/Heisenbug
+
+math函数
+clojure.string lower-case函数
+map函数：
+    (map f [a b c])和[(f a) (f b) (f c)]等价
+    (map f [a b c] [x y z]) 和 [(f a x) (f b y) (f c z)]的等价
+
+
+reduce函数：
+    (reduce max [0 -3 10 48])   ;= 48
+    (reduce + 50 [1 2 3 4])     ;= 60
+    (reduce
+        (fn [m v]
+            (assoc m v (* v v)))
+        {}
+        [1 2 3 4])  ;= {4 16, 3 9,2 4, 1 1}
+
+apply函数：
+    (apply hash-map [:a 5 :b 6])  ;= {:a 5 :b 6}
+
+    (def args [2 -2 10])
+    (apply * 0.5 3 args)  ;= -60
+
+偏函数partial:
+    (def only-strings (partial filter string?))
+    (only-strings ["a" 3 "b" 5])  ;= ("a" "b")
+
+组合函数comp:
+    (def k (comp f g h))  ; k是一个由任意多个函数f, g, h组成的一个函数
+    (k a b)  ; 函数的参数格式是h的参数个数，返回值是调用f函数的返回值，相当于(f (g (h a b)))
+
+partial和comp的特点是可以定义无参风格编程
+
+纯函数：
+    副作用是指函数与外界环境的交互，不管是函数改变外部环境，还是依赖外部环境的一个值，
+    任何一个跟随机数（rand,rand-int函数）相关的函数都是有副作用的，因为：
+        1：依赖于它使用的随机数生成器的状态
+        2：因为随机数生成器每次生成的随机数是不一样的，这个函数就依赖于环境，它就是有副作用的。
+    任何跟IO打交道，或者对共享对象进行修改的函数都是有副作用的。
+    如果获取一个twitter账号的粉丝数目，是有副作用的，因为它会不断改变。
+    纯函数不依赖于外部的数据源，也不会改变任何外部环境的状态，因而对于相同的参数，始终返回相同的结果，所有数学相关的函数都是纯函数（如+，并不依赖于外部环境）
+    相同的参数，始终返回相同的结果称为幂等性，如果一个函数始终返回同一个值，但是有副作用--比如会写日志文件，那么这个函数是幂等的，但不是纯函数。
+        纯函数更容易理解
+        纯函数更容易测试：不需要mock，尽可能多的功能写进可以进行单元测试的方法，一些跟状态相关的功能由集成测试和功能测试来覆盖
+        纯函数的结果是可以被缓存的，并且容易并行化。只包含纯函数的表达式被称为是引用透明的，
+        就是说，对任何使用这种表达式的地方，都可以用它的返回值代替，而不会改变代码的行为。这样就可以放心得缓存纯函数的返回值。这样下次就直接返回这个返回值，不用重新计算，这种技术叫做：内存化。
+        可以使用memorize函数来对函数进行内存化。
+        为防止memorize的内存泄露:可以用以下方法：
+            1：不要把它们定义成顶层的函数 ，把它们定义成一个顶层函数的内部，然后只在需要的时候调用它们。
+            2：使用core.memorize（https://github.com/clojure/core.memorize），提供了一些策略，如缓存失效。
+
+
+
+list, vector, map, set特点：
+    1：数据结构首先是依据抽象来用的，不是依据具体的实现细节来用。
+    2：数据结构是不可改变的而且是持久的
+
+conj把一个值附加在vector后面，或者附加在列表的前面，或者把一个键值对家到一个map里。如果键已经存在，则替换对应的值。map和set没有顺序。
+seq为vector，set，列表提供了符合直觉的顺序视图，并把map也包括进来，map的顺序视图是包含map里面所有键值对（以[key value])的一个列表。返回都是list
+into是建立在seq和conj之上，意味着into能自动用于任何支持seq和conj的值。
+
+
+
+Clojure集合中会实现的几个主要抽象：
+    Collection, Sequence, Associative, Indexed, Stack, Set, Sorted
+
+集合collection
+    Clojure中所有数据结构都实现了Collection抽象。可以使用如下集合函数：
+        1：用conj来添加一个元素到集合
+        2：用seq来获取集合的顺序视图
+        3：用count来获取集合的元素个数，还可以执行一些java的类，如实现CharSequence的类，map，set及数组
+        4：用empty来获取一个跟所提供集合类型一样的空集合
+        5：用=来判断两个或多个集合是否相等。
+
+    (into '(1 2 3) [:a :b :c])  ;= '(:c :b :a 1 2 3) 把元素添加到列表的前面，如果conj不把元素添加到最前面的话，比如添加到列表的最后面，则需要遍历这个列表，保证性能。
+
+序列：Sequence：
+    Sequence接口定义了一个获取并且遍历各种集合的一个顺序视图的一种方法。序列通常被叫做seq，提供以下接口：
+        1：seq函数返回给传入参数一个序列
+        2：first，rest，以及next提供遍历序列的一个方法
+        3：lazy-seq创建一个内容是一个表达式结果的惰性序列
+    可以用seq来产生有效值的类型称为可序列的类型：
+        1：所以的Clojure集合类型
+        2：所有Java集合类型（也就是java.util.*)
+        3：所有的Java map
+        4：所有的java.lang.CharSequence，包括String
+        5：实现了java.lang.Iterable的任意类型，iterator-seq和enumerator-seq可以从java.lang.Iterator或者java.lang
+        .Enumerator获取一个序列，这2个函数时独立于seq的，因为它们是有破坏性的，Iterator或Enumerator只能被遍历一次，seq是非破坏性的，每次调用都能够提供一个新的Iterator对象。
+        6：数组
+        7：nil（或者是java方法返回的null）
+        8：任何实现了clojure.lang.Seqable接口的类型
+        seq对任何nil或者任何类型的空集合都返回nil
+        许多跟序列打交道的函数都对它们的参数隐式调用了seq，比如：要想把String作为参数传给map或set：(map str "Clojure")  (set "Programming")
+
+        rest和next以不同的方式对待空序列和只包含单个值的序列：
+            (rest [1])   ;= ()
+            (next [1])   ;= nil
+            (rest nil)   ;= ()
+            (next nil)   ;= nil
+        对任何x，对于下面成立：
+            (= (next x)
+                (seq (rest x)))
+    序列不是列表：序列（seq），列表（list）  (identical? some-list (seq some-list))始终为true
+        1：要计算一个序列的长度是比较耗时的
+        2：序列的内容可能是惰性的，而只有在真的要用到序列中值的时候才会去实例化
+        3：一个生成序列的函数可能生成一个无限惰性序列，所以也就是不可数的。
+        4：列表会保存它的长度，
+
+        range函数返回一个范围的数字的惰性序列，这些数字只有在真正需要的时候才会去计算出来，计算包含的元素个数是把一个惰性序列实例化的方法之一。
+    有两种方法直接创建seq：
+        1：cons函数：接收2个参数，第一个参数是一个值作为新seq的头，第2个参数是一个集合，作为新seq的尾巴：(cons 0 (range 1 5))  ;= (0 1 2 3 4)
+        2：list*：list*是一个帮助函数，来简化创建指定多个值来创建seq的需求。
+            (cons 0 (cons 1 (cons 2 (cons 3 (range 4 10)))))  ;= (0 1 2 3 4 5 6 7 9)
+            (list* 0 1 2 3 (range 4 10))  ;= (0 1 2 3 4 5 6 7 9)
+
+
+    惰性序列：访问一个惰性序列的过程被称为实例化。当一个惰性序列中的元素都被计算出来了，就说这个序列被完全实例化了。可以通过lazy-seq来创建一个惰性序列。这个宏接受任意返回值是一个可序列的值的表达式。
+    惰性序列打印要指定个数，或者用set!来设置*print-length*参数到一个合理的值来限制打印集合的元素个数
+        (defn random-ints
+            [limit]
+            (lazy-seq
+                (println "realizing random number")
+                (cons (rand-int limit)
+                    (random-ints limit)))
+        (def rands (take 10 ((random-ints 50))))
+        (first rands)  ; realizing random number
+        (nth rands 3)  ; 打印3条 realizing random number
+        (count rands)  ; 打印6条realizing random number
+        (cout rands)   ; 每次只实例化一次。
+
+    用repeatedly实现惰性序列：
+        (repeatedly 10 (partial rand-int 50))
+    只接受一个参数的repeatedly会返回一个包含无限随机数的惰性序列。
+    所有核心的序列处理函数都返回惰性序列：map, for, filter, take drop，由它们引申出来的一些函数take-with, take-while, drop-while,remove等
+    file-seq, line-seq, xml-seq从各个数据源进行消费和转换数据
+
+    next始终返回nil，而不是空的序列，是因为next始终会去强制实例化序列尾巴的第一个元素，而rest始终简单地返回序列的尾巴：
+        (def x (next (random-ints 50)))  ；会打印2个realizing random number
+        (def x (rest (random-ints 50)))  ；会打印1个realizing random number
+
+    顺序解构始终使用next而不是rest，所以如果在解构一个惰性序列的话，那么始终会实例化它的尾巴的头元素。
+        (let [[x & rest] (random-ints 50)])  ; 会打印2个realizing random number
+
+    如果需要完全实例化一个惰性序列，如果想要保持这个序列的所有元素，应该使用doall，如果并不需要惰性序列的具体内容（比如像要的是惰性序列实例化的时候所产生的副作用），那么应该使用dorun
+        (dorun (take 5 (random ints 50)))  ；会打印5个realizing random number
+
+    如果有一个惰性序列的文件（通过file-seq获得）,并且希望对这些文件进行一些操作，可以使用map，map进行的操作并没有真正发生，只是保存在惰性序列里面了。然后调用dorun就可以破事这些操作实际发生。
+    通常，对序列操作的函数都会在它的文档中说明它的返回值是不是惰性序列，或者会不会强制实例化这个惰性序列。
+        (doc iterate) ；生成惰性序列，传入的参数必须没有副作用
+        (doc reverse) ；生成一般序列，不是惰性的
+        定义惰性序列的代码应该尽量不要有副作用
+            (apply str (remove (set "aeiouy")
+                                "vowels are useless! or maybe not..."))  ;= "vwls r slss! r mb nt..."  去掉元音 \
+
+   头保持：
+        一个惰性序列的一个元素被实例化之后，只要保持了这对这个序列的引用，那么这个元素就会一直保持着了，这意味着，只要保持了对序列的一个引用，序列中的元素就不能被垃圾回收，这个问题称为头保持
+        有可能会出现内存用尽：
+        split-with函数需要一个谓词函数，一个可序列的值，返回两个惰性序列，第一个是满足这个谓词的惰性序列，第2个是不满足这个谓词的惰性序列
+        (let [[t d] (split-with #(< % 12) (range 1e8))]
+              [(count d) (count t)])  ;= #<OutOfMemoryError java.lang.OutOfMemoryError:Java heap space>
+
+         (let [[t d] (split-with #(< % 12) (range 1e8))]
+              [(count t) (count d)])  ;= [12 99999988]
+        向map或者set中插入元素，=函数以及count函数都是头保持问题的诱因，因为它们都会强制对惰性序列进行完全实例化。
+
+Associative：关系型数据结构Associative接口所抽象的是把一个key和一个value关联起来的数据结构，这个接口包括4个操作：
+         1：assoc：它向集合中添加一个新的key到value的映射
+         2：dissoc：从集合中移除一个从指定key到value的映射
+         3：get：从几个镇南关找出指定key的value
+         4：contains?：是一个谓词，为这个集合包含指定的key的时候它返回true，否则返回false，不是指是否包含某个值，而是指是否包含某个key（vector的key是索引，set的key是它的值）
+
+         get和assoc也支持对vector进行操作，他的key是数组下标
+         使用get来操作set的时候，它的返回值意味着set是它里面的值到值本身的映射。
+
+         get和contains?非常通用，它们可以很高效地操作vector，map，set，Java里面的map，字符串以及Java数组
+
+         如果集合里面不包含某个key，并且你调用的时候也没有提供默认值，那么get会返回nil，但是这个key对应的value也可能正好就是nil，这时完全没有问题的：
+            (get {:ethel nil} :lucy) ;= nil
+            (get {:ethel nil} :ethel} ;= nil
+         这时可以用contains?来判断是否包含某个key,但是这样就对map进行了2次查询（contains? get),
+         find函数：与get类似，只是它返回的不是key所对应的value，如果map里面包含指定的key的话，它返回一个键值对，如果不包含这个key的话，则返回nil
+            (find (:ethel nil) :lucy) ;= nil
+            (find (:ethel nil) :ethel) ;= [:ethel nil]
+         find函数很容易跟解构形式如if-let（或者when-let）一起使用：
+            (if-let [e (find {:a 5 :b 6} :a)]
+                (format "found %s => %s" (key e) (val e))
+                "not found")   ;= "found :a => 5"
+            (if-let [k v (find (:a 5 :b 6) :a)]
+                (format "found %s => %s" k v)
+                "not found")    ;= "found :a => 5"
+
+         在处理条件判断中，false和nil有一样的问题，解决方法与nil一样
+
+索引集合：Indexed:一般情况下，不需要使用数组下标，如果代码依赖下标了，说明代码有问题了。
+        nth函数：对于越界的下标处理，nth会抛出异常，而get则是返回nil
+        nth只能接受数字作为查询的key（下标），它可以作用于很多有小标概念的值：vector, 列表，序列，Java数组，Java列表，字符串，正则表达式的匹配数组等。
+        当传递一个不支持的参数类型给get时，它返回nil而不是抛出异常。nth则直接抛出异常
+            (get 42 0)  ;= nil
+            (nth 42 0)  ;= java.lang.UnsupportedOperationException：
+
+栈：Stack：
+        1：用conj来把一个值添加到栈中去（重用集合的通用操作）
+        2：用pop来获取栈顶的值，并且移除这个值
+        3：用peek来获取栈顶的值，但是不去除这个值
+        对一个空栈调用pop会出错
+        set接口需要disj来从set里面移除一个元素
+            (disj #{1 2 3} 3 1)   ;= #{2}
+
+有序集合：Sorted，包含以下函数：
+        1：rseq函数可以在常量时间内反序列地返回一个集合的元素
+        2：subseq函数可返回一个集合的某一个区间的元素的序列
+        3：rsubseq和subseq类似，但是返回的元素是反序的。
+        只有map和set实现了sorted接口，要创建sorted集合可以使用sorted-map, sorted-set来创建有序的map和set
+        如果要提供自己的谓词或者比较器来定义排序规则的话，可以使用sorted-map-by，sorted-set-by
+        reseq能保证在常量时间返回，reverse需要线性时间
+            (def sm (sorted-map :z 5 :x 9 :y 0 :a 3 :b 2 :c 4))
+            (subseq sm > :b <= :y)  ;= ([:c 4] [:x 9] [:y 0])
+
+        compare函数定义默认排序，正序，它所支持所有的Clojure标量及排序集合，它会按照字典排序法来在每一层对元素排序。
+            (compare 2 2)  ;= 0
+            (compare "ab" "abc")  ;= -1
+            (compare  ["a" "b" "c"] ["a" "b"]) ;= 1
+            (compare ["a" 2] ["a" 2 0]) ;= -1
+        compare不仅支持字符串，数字以及顺序集合，它支持任何实现了java.lang.Comparable接口的值，包括布尔值，关键字，符号，以及所有实现了这个接口的Java类。它是默认的比较器，可以定义自己的。
+
+        使用比较器和谓词来定义排序规则：
+            比较器是一个接受两个参数的函数，如果第一个参数大于第2个参数，那么返回一个正数，如果第1个参数小于第2个参数则返回负数，如果相等返回0
+            Clojure里面所有的函数都实现了java.util.Comparator接口，所以它们都是潜在的比较器,任何接收2个参数的函数都是比较器
+            比较函数可以直接传给有序集合的工厂函数，如sort，sort-by(或者任何期望一个java.util.Comparator作为参数的Java API）
+                (sort < (repeatedly 10 #(rand-int 100))) ;= (12 16 22 23 41 42 61 63 83 87)
+                (sort-by first > (map-indexed vector "Clojure"))  ;= ([6 \e] [5 \t] [4 \u] [3 \j] [2 \o] [1 \l] [0 \C])
+        (sorted-map-by compare :z 5 :x 9)    ;= {:x 9 :z 5}
+        (sorted-map-by (comp - compare) :z 5 :x 9)  ;= {:z 5 :x 9}
+
+        对sorted-set进行增加和删除元素时，要根据它的比较器来增加和删除
+
+        subseq和rsubseq也可以用比较器所定义的顺序正常截取集合的一段
+
+集合本身也是函数：clojure里面的集合都可以当做函数来使用，这个函数的作用就是从自己里面查出指定key或者下标所对应的元素：
+        ([:a :b :c] 2)  ;= :c
+        ({:a 5 :b 6} :b)  ;= 6
+        ({:a 5 :b 6} :c 7)  ;= 7    map接收第2个参数作为默认值
+        (#(1 2 3) 3)       ;= 3  vector和set只接受一个参数，不支持传入默认值，传递给vector的下标必须要在vector的下标范围内，于nth一样
+集合的key也是函数：最常见的key类型：关键字和符号，也是函数，就是到集合里面去把自己或者自己所对应的value找出来：
+        (:b {:a 5 :b 6})   ;= 6
+        (:c {:a 5 :b 6} 7)  ;= 7
+        (:d #(:a :b :c))    ;= nil
+        因为数字不能作为函数，所以vector不能通过这个方式来查找。
+
+通过推荐把关键字或者符号作为查找函数。这种方式可以避免NullPointerException，因为关键字，符号通常都是字面量，也就不可能为null，如果集合的key不是关键字或者符号，则需要用get或nth
+
+因为关键字，符号以及很多的集合都是函数，使用它们作为高阶函数的输入参数是很常见同时也是非常方便的做法。
+    (map :name [{:age 21 :name "David"} {:gender :f :name "Suzanne"} {:name "Sara" :location "NYC"}])
+    ;= ("David" "Suzanne" "Sera")
+
+    (some #{1 3 7} [0 2 4 5 6])   ;= nil
+    (some #{1 3 7} [0 2 3 4 5 6]) ;= 3 some函数在一个序列里面搜索第一个能够符合指定谓词的元素
+    (filter :age [{:age 21 :name "David"} {:gender :f :name "Suzanne"} {:name "Sara" :location "NYC"}])
+    ;= ({:age 21 :name "David"})
+
+    (filter (comp (partial <= 25) :age) [{:age 21 :name "David"}
+                                         {:gender :f :name "Suzanne" :age 20}
+                                         {:name "Sara" :location "NYC" :age 34}])
+    ;= ({:age 34, :name "Sara", :location "NYC"})
+
+    remove函数的作用于filter相反，相当于(filter (complement f) collection)
+
+使用set来检测集合中是否包含某个元素时，如果要检测的元素是nil或者false的话，那么结果可能与预期的不一样，因为这两个值在逻辑意义上就是false:
+    (remove #{5 7} (cons false (range 10)))   ;= (false 0 1 2 3 4 6 8 9)
+    (remove #{5 7 false} (cons false (range 10))  ;= (false 0 1 2 3 4 6 8 9)
+    如果不确定集合里面是否会包含false或者false时，最好使用contains?，而不是get之类的直接调用
+
+    (remove (partial contains? #{5 7 false}) (cons false (range 10)))  ;= (0 1 2 3 4 6 8 9)
+
+数据结构类型：
+     列表：List,列表是单向链表，因此只对链头支持高效的访问和修改操作，使用conj把一个新元素加到列表头上去。使用pop，rest获取不包含链头的子列表
+         因为是列表，所以它不支持高效的随机访问操作。所以对一个列表调用nth的时间开销是线性的，而不是常量的(vector和数组中随机访问元素的时间开销是常量级别的）
+         列表不支持get，因为在列表上无法达到get亚线性的性能要求。
+         列表是自身的序列，对一个列表调用seq会始终返回这个列表本身，而不是对于这个列表的顺序视图
+         空列表可以用()来表示
+         (list 1 2 (+ 1 2))
+         可以用list?来测试一个集合是不是列表
+     vector：是一种顺序数据结构，它支持高效的随机访问和更改语义，与ArrayList类似，实现了associative，indexed，stack抽象
+          (vector 1 2 3)  ;= [1 2 3]
+          (vec (range 5))  ;= [0 1 2 3 4]
+          vector和list的函数作用类似，vec函数只接受一个参数，它的作用是把这个传入的集合转换成一个新的vector，
+          当有数组，列表，序列或者其他可序列的值，但是要对这个值进一步处理的话，可以通过vec来转换成vector
+          vector?测试一个值是不是vector
+
+          vector是一种不适合暴露到系统外部的数据结构，对它的使用最好保持在类库或者组件的内部，而不要在公共API上使用，原因为：
+            1：tuple本身是不能自我注解的，看到一个tuple，不知道tuple每个值是什么含义，必须回到tuple赋值的地方才能知道
+            2：tuple是不灵活的，要构建一个tuple，需要提供tuple的所有字段，只能往tuple尾部添加元素。
+
+     set：
+        #{1 2 3} ;= #{1 2 3}
+        (hash-set :a :b :c :d)  ;= #{:a :c :b :d}
+        (set [1 6 1 8 3 7 7])  ;= #{1 3 6 7 8}
+
+     map:
+        map的key必须保持唯一
+        (hash-map :a 5 :b 6)  ;= {:a 5 :b 6}
+        (apply hash-map [:a 5 :b 6])  ;= {:a 5 :b 6}
+        (keys m)  ;= (:a :b :c)
+        (vals m)  ;= (1 2 3)
+        (map key m)  ;= (:a :b :c)
+        (map val m)  ;= (1 2 3)
+
+        (def orders
+                [{:product "Clock" :customer "Wile Coyote", :qty 6, :total 150}
+                {:product "Clock" :customer "Wile Coyote", :qty 6, :total 150}
+                {:product "Clock" :customer "Wile Coyote", :qty 6, :total 150}])
+
+        (defn reduce-by
+            [key-fn f init coll]
+            (reduce (fn [summaries x]
+                        (let [k (key-fn x)]
+                            (assoc summaries k (f (summaries k init) x))))
+                     {} coll))
+
+        (fn [order]
+            [(:customer order) (:product order)])
+
+        #(vector (:customer %) (:product %))
+        (juxt :customer :product)
+
+        (reduce-by (juxt :customer :product)
+                    #(+ %1 (:total %2)) 0 orders)
+
+        (defn reduce-by
+            [key-fn f init coll]
+            (reduce (fn [summaries x]
+                        (let [k (key-fn x)]
+                            (assoc-in summaries k (f (get-in summaries k init) x))))
+                     {} coll))
+
+
+不可变性和持久性：
+    数据结构是不可变的
+    对于clojure不可变数据结构的操作时非常高效，通常跟java里面对应的操作一样高效，这时因为clojure数据结构是持久的，这种技术使得做过修改的集合跟原来的集合共享内部数据存储。
+    Purely Functional Data Structures   http://www.amazon.com/dp/0521663504
+    对于任何一个操作，clojure都不会去做一个深度拷贝，只有受影响的那部分会被添加/删除，而不变的那些元素还是共享老集合里的那些。
+    根绝大多数其他语言中的map一样，Clojure中的map隐式实现成树状，而map中的具体的值是保存在树结构的叶子节点上。
+
+    为了提供持久性的语义，clojure中几乎所有的数据结构对是通过树来实现的，包括hashmap，hashset，有序map。有序set和vector等。
+    hashmap使用的是hash array mapped trie的持久化版本
+    (http://blog.higher-order.net/2009/09/08/understanding-clojures-persistenthashmap-deftwice
+    讲解clojure的PersistentHashMap类中对于hash array mapped trie的实现
+
+    vector使用的是一个叫做array mapped hash trie的更进一步的变种
+    http://blog.higher-order.net/2009/02/01/understanding-clojures-persistentvector-implementation
+    对clojure的PersistentVector的介绍
+
+    hashset基于hashmap来实现，有序set和有序map使用的是一种红黑树的持久化版本。以保证排序的性能
+
+    Git和CouchDB都是利用不可变的持久的树的方法：
+    http://eclipsesource.com/blogs/2009/12/13/persistent-trees-in-git-clojure-and-couchdb-data-structure-convergence
+
+    不可变数据结构特点：
+        1：简化多线程
+        2：轻松的版本化
+            (def version1 {:name "Chas" :info {:age 31}})
+            (def version2 (update-in version1 [:info :age] + 3))  ; update-in函数
+        3：易变集合：易变集合是持久化集合的对应物，持久化集合保证一个值的历史版本的完整性，而易变集合不做这个保证，在对一个易变集合做修改后，对于旧版本易变集合的任何引用都不能再使用了。
+        易变集合是可修改的。
+            (def x (transient []))  ; 创建易变vector
+            (def y (conj! x 1))     ; conj!是conj的易变版本
+            (count y)  ;= 1
+            (count x)  ;= 1
+        易变集合对那种在一个循环中不断创建对象是一种很方便的优化手段，clojure程序如果发现性能问题，一般首先查看的是内存分配是不是有问题。
+
+        into函数在任何可以使用易变集合的地方都使用了易变集合（frequencies和group-by函数也使用了易变集合），当目标集合是vector或者是无序的map或者set的时候使用易变集合
+        只有vector，无序的map和无序的set才有易变版本。监测一个集合是不是clojure.lang.IEditableCollection的实例，Clojure用这个集合来标明一个集合可以产生可变版本。
+
+        被用来产生易变集合的持久性集合是不会受影响的
+            (def v [1 2])
+            (def tv (transient v))
+            (conj v 3)  ;= [1 2 3]
+
+        用persistent!来把一个易变集合变成持久性集合会使得那个易变集合不再可用（persistent!的!表示提醒用户这个函数时一个破坏性操作)
+            (persistent! tv)  ;= [1 2]
+            (get tv 0)   ；= #<IllegalAccessError java.lang.IllegalAccessError: Transient used after persistent! call>
+            transient和persistent!都会在常量时间内返回。
+
+        易变集合支持很多它的持久化版本所支持的访问函数，但并不是全部：
+            (nth (transient [1 2]) 1)  ;= 2
+            (get (transient {:a 1 :b 2}) :a)  ;= 1
+            ((transient {:a 1 :b 2}) :a)      ;= 1
+            ((transient [1 2]) 1)     ;= 2
+            (find (transient {:a 1 :b 2}) :a)  ;= #<CompilerException java.lang.ClassCastException:clojure.lang
+            .PersistentArrayMap$TransientArrayMap cannot be cast to java.util.Map>
+
+        易变集合不支持seq，原因是一个序列可能会比它的数据源活得时间更长，而易变集合是可变的，因此它不适合做序列的数据源。
+
+        所有持久性集合所支持的更新函数，易变集合都是不支持的，易变函数的更新函数有：conj!, assoc!, dissoc!, disj!, pop!
+        一旦在易变集合上使用了上面这些函数，那个集合再也不可用了，即使时读取操作也不行。
+
+        对易变集合操作conj!,assoc!, dissoc!, disj!, pop!等，为了这些操作效果生效，必须使用这些函数的返回值。不能始终保留对易变集合的原始引用，否则会产生一些错误的结果。
+        (let [tm (transient {})]
+            (doseq [x (range 100)]
+                (assoc! tm x 0))
+            (persistnet! tm))   ;= (0 0, 1 0, 2 0, 3 0, 4 0, 5 0, 6 0, 7 0)
+
+
+        易变集合只能在创建这个集合的线程内操作
+
+        易变集合不能组合：persistent!不会遍历创建的嵌套易变集合，因此对最上层调用persistent!，对于内嵌的子集合是没有效果的。
+        (persistent! (transient [(transient ()])))
+        ;= [#<TransientArrayMap clojure.lang.PersistentArrayMap$TransientArrayMap@b57b39f>]
+        (= (transient [1 2]) (transient [1 2]))  ;= false   易变集合是可修改的，，它们没有语义
+
+元数据：元数据可以被关联到任何Clojure数据结构，序列，记录。符号以及引用类型，而且始终以一个map形式。
+        (def a ^{:created (System/currentTimeMillis)} [1 2 3])
+        (meta a) ;= {:created 1322065198153}
+
+        如果元数据的key是关键字，而值是布尔值true，那么可以用一种简单的形式表示，而且可以把多个这种元数据并排指定：
+            (meta ^:private [1 2 3])  ;= {:private true}
+            (meta ^:private ^:dynamic [1 2 3])   ;= {:dynamic true, :private true}
+
+        对于更新一个给定值的元数据，可以使用with-meta和vary-meta
+            (def b (with-meta a (assoc (meta a) :modified (System/currentTimeMillis))))
+            (meta b)   ;= {:modified 132323423423, :created 1231231232122}
+            (def b (vary-meta a assoc :modified (System/currentTimeMillis)))
+            (meta b)  ;= {:modified 132323423423, :created 1231231232122}
+        with-meta把一个值的元数据完全替换成给定的元数据，vary-meta通过给定的更新函数以及需要的参数对值当前的元数据进行更新。
+
+        元数据是关于数据的数据，改变一个值的元数据并不会改变这个值打印(println)出来的形式，也不会影响这个值跟别的值的相等性（或不等性）
+            (= a b)  ;= true
+            a  ;= [1 2 3]
+            b  ;= [1 2 3]
+            (= ^{:a 5} 'any-value  ^{:b 5} 'any-value)  ;= true
+
+        对数据结构的修改的操作返回的新的数据结构会保留原值的元数据：
+            （meta (conj a 400))   ;= {:created 1231231312}
+
+
+
+
+
+
+
+
+
+
+
