@@ -712,7 +712,7 @@ Function0是没有参数的函数，Function1是有一个参数的函数，每�
                 this.release = release;
             }
             public scala.Function2<java.lang.Object, java.lang.Object, java.lang.Object> test() {
-                            return release;
+                return test;
             }
             public void test_$eq(scala.Function2<java.lang.Object, java.lang.Object, java.lang.Object> test) {
                 this.test = test;
@@ -1858,7 +1858,7 @@ ScalaTest的Runner应用可以在命令行或ant任务中调用，必须指定�
       }
 
       public java.lang.String toString() {
-            return return  scala.runtime.ScalaRunTime$.MODULE$._toString(this);
+            return  scala.runtime.ScalaRunTime$.MODULE$._toString(this);
       }
 
       public boolean equals(java.lang.Object object) {
@@ -1866,8 +1866,15 @@ ScalaTest的Runner应用可以在命令行或ant任务中调用，必须指定�
                 return true;
             }
 
-            Object o = object;
-            if (o instanceOf A)
+            Object o = object;   // astore_2
+            if (o instanceOf A) {
+                A a = (A) object //astore 4
+                if (this.x() == a.x() && this.y() == a.y() && a.canEqual(this)) {
+                    return true;
+                }
+            }
+
+            return false;
       }
         Code:
            0: aload_0
@@ -1930,8 +1937,12 @@ ScalaTest的Runner应用可以在命令行或ant任务中调用，必须指定�
       public A apply(int x, int y) {
             return new A(x, y);
       }
-      public scala.Option<scala.Tuple2<java.lang.Object, java.lang.Object>> unapply(A) {
+      public scala.Option<scala.Tuple2<java.lang.Object, java.lang.Object>> unapply(A a) {
+            if (a != null) {
+                return new scala.Some(new scala.Tuple2$mcII$sp()(a.x(), a.y()));
+            }
 
+            return scala.None$.MODULE$;
       }
         Code:
            0: aload_1
@@ -2305,3 +2316,359 @@ scala的集合类的某些标准操作会产生可选值，例如scala的Map的g
 head和tail方法仅能够作用在非空列表上，如果执行在空列表上，会抛出异常。
 
     Nil.head  // java.util.NoSuchElementException : head of empty list
+
+case object可以直接用这个object名就表示这个对象，如Nil，就是case object
+
+    case object C
+    class B {
+          val c = C
+          val s = C.toString()
+    }
+    生成的java代码如下：
+    public final class C {
+      public static java.lang.String toString() {
+            return C$.MODULE$.toString();
+      }
+      public static int hashCode() {
+            return C$.MODULE$.hashCode();
+      }
+      public static boolean canEqual(java.lang.Object object) {
+            return C$.MODULE$.canEqual(object);
+      }
+      public static scala.collection.Iterator<java.lang.Object> productIterator() {
+            return C$.MODULE$.productIterator();
+      }
+      public static java.lang.Object productElement(int x) {
+            return C$.MODULE$.productElement(x);
+      }
+      public static int productArity() {
+            return C$.MODULE$.productArity();
+      }
+      public static java.lang.String productPrefix() {
+            return C$.MODULE$.productPrefix();
+      }
+    }
+
+    public final class C$ implements scala.Product,scala.Serializable {
+      public static final C$ MODULE$ = new C$();
+
+      public java.lang.String productPrefix() {
+            return "C";
+      }
+      public int productArity() {
+            return 0;
+      }
+      public java.lang.Object productElement(int index) {
+            return new java/lang/IndexOutOfBoundsException(scala.runtime.BoxesRunTime.boxToInteger(index).toString());
+      }
+        Code:
+           0: iload_1
+           1: istore_2
+           2: new           #27                 // class java/lang/IndexOutOfBoundsException
+           5: dup
+           6: iload_1
+           7: invokestatic  #33                 // Method scala/runtime/BoxesRunTime.boxToInteger:(I)Ljava/lang/Integer;
+          10: invokevirtual #36                 // Method java/lang/Object.toString:()Ljava/lang/String;
+          13: invokespecial #39                 // Method java/lang/IndexOutOfBoundsException."<init>":(Ljava/lang/String;)V
+          16: athrow
+
+      public scala.collection.Iterator<java.lang.Object> productIterator() {
+            return scala.runtime.ScalaRunTime$.MODULE$.typedProductIterator(this);
+      }
+      public boolean canEqual(java.lang.Object object) {
+            return object instanceOf C$;
+      }
+      public int hashCode() {
+            return 67;
+      }
+      public java.lang.String toString() {
+            return "C";
+      }
+      private java.lang.Object readResolve() {
+            return MODULE$;
+      }
+      private C$() {
+            super();
+            this.MODULE$ = this;
+            Product$class.$init$(this);
+      }
+    }
+
+    public class B {
+      private final C$ c;
+      private final java.lang.String s;
+
+      public C$ c() {
+            return this.c;
+      }
+
+      public java.lang.String s() {
+            return this.s;
+      }
+      public B() {
+            super();
+            this.c = C$.MODULE$;
+            this.s = C$.MODULE$.toString();
+      }
+    }
+
+    // 插入排序
+    def isort(xs : List[Int]) : List[Int] =
+        if (xs.isEmpty) Nil
+        else insert(xs.head, isort(xs.tail))
+    def insert(x : Int, xs : List[Int]) : List[Int] =
+        if (xs.isEmpty || x <= xs.head) x :: xs
+        else xs.head :: insert(x, xs.tail)
+
+###　列表模式：
+
+    val List(a, b, c) = fruit
+
+    class L {
+        val list = List("a", "b", "c")
+        val List(a, b, c) = list
+        val x :: y :: rest = list
+    }
+
+    生成的java文件为：
+    public class L {
+      private final scala.collection.immutable.List<java.lang.String> list;
+
+      private final scala.Tuple3<java.lang.String, java.lang.String, java.lang.String> x$1;
+
+      private final java.lang.String a;
+
+      private final java.lang.String b;
+
+      private final java.lang.String c;
+
+      private final scala.Tuple3<java.lang.String, java.lang.String, scala.collection.immutable.List<java.lang.String>> x$2;
+
+      private final java.lang.String x;
+
+      private final java.lang.String y;
+
+      private final scala.collection.immutable.List<java.lang.String> rest;
+
+      public scala.collection.immutable.List<java.lang.String> list();
+        Code:
+           0: aload_0
+           1: getfield      #26                 // Field list:Lscala/collection/immutable/List;
+           4: areturn
+
+      public java.lang.String a();
+        Code:
+           0: aload_0
+           1: getfield      #31                 // Field a:Ljava/lang/String;
+           4: areturn
+
+      public java.lang.String b();
+        Code:
+           0: aload_0
+           1: getfield      #33                 // Field b:Ljava/lang/String;
+           4: areturn
+
+      public java.lang.String c();
+        Code:
+           0: aload_0
+           1: getfield      #35                 // Field c:Ljava/lang/String;
+           4: areturn
+
+      public java.lang.String x();
+        Code:
+           0: aload_0
+           1: getfield      #37                 // Field x:Ljava/lang/String;
+           4: areturn
+
+      public java.lang.String y();
+        Code:
+           0: aload_0
+           1: getfield      #39                 // Field y:Ljava/lang/String;
+           4: areturn
+
+      public scala.collection.immutable.List<java.lang.String> rest();
+        Code:
+           0: aload_0
+           1: getfield      #41                 // Field rest:Lscala/collection/immutable/List;
+           4: areturn
+
+      public L();
+        Code:
+           0: aload_0
+           1: invokespecial #45                 // Method java/lang/Object."<init>":()V
+           4: aload_0
+           5: getstatic     #51                 // Field scala/collection/immutable/List$.MODULE$:Lscala/collection/immutable/List$;
+           8: getstatic     #56                 // Field scala/Predef$.MODULE$:Lscala/Predef$;
+          11: iconst_3
+          12: anewarray     #58                 // class java/lang/String
+          15: dup
+          16: iconst_0
+          17: ldc           #59                 // String a
+          19: aastore
+          20: dup
+          21: iconst_1
+          22: ldc           #60                 // String b
+          24: aastore
+          25: dup
+          26: iconst_2
+          27: ldc           #61                 // String c
+          29: aastore
+          30: checkcast     #63                 // class "[Ljava/lang/Object;"
+          33: invokevirtual #67                 // Method scala/Predef$.wrapRefArray:([Ljava/lang/Object;)Lscala/collection/mutable/WrappedArray;
+          36: invokevirtual #71                 // Method scala/collection/immutable/List$.apply:(Lscala/collection/Seq;)Lscala/collection/immutable/List;
+          39: putfield      #26                 // Field list:Lscala/collection/immutable/List;
+          42: aload_0
+          43: aload_0
+          44: invokevirtual #73                 // Method list:()Lscala/collection/immutable/List;
+          47: astore_1
+          48: getstatic     #51                 // Field scala/collection/immutable/List$.MODULE$:Lscala/collection/immutable/List$;
+          51: aload_1
+          52: invokevirtual #77                 // Method scala/collection/immutable/List$.unapplySeq:(Lscala/collection/Seq;)Lscala/Some;
+          55: astore_2
+          56: aload_2
+          57: invokevirtual #83                 // Method scala/Option.isEmpty:()Z
+          60: ifne          345
+          63: aload_2
+          64: invokevirtual #87                 // Method scala/Option.get:()Ljava/lang/Object;
+          67: ifnull        345
+          70: aload_2
+          71: invokevirtual #87                 // Method scala/Option.get:()Ljava/lang/Object;
+          74: checkcast     #89                 // class scala/collection/LinearSeqOptimized
+          77: iconst_3
+          78: invokeinterface #93,  2           // InterfaceMethod scala/collection/LinearSeqOptimized.lengthCompare:(I)I
+          83: iconst_0
+          84: if_icmpne     345
+          87: aload_2
+          88: invokevirtual #87                 // Method scala/Option.get:()Ljava/lang/Object;
+          91: checkcast     #89                 // class scala/collection/LinearSeqOptimized
+          94: iconst_0
+          95: invokeinterface #96,  2           // InterfaceMethod scala/collection/LinearSeqOptimized.apply:(I)Ljava/lang/Object;
+         100: checkcast     #58                 // class java/lang/String
+         103: astore_3
+         104: aload_2
+         105: invokevirtual #87                 // Method scala/Option.get:()Ljava/lang/Object;
+         108: checkcast     #89                 // class scala/collection/LinearSeqOptimized
+         111: iconst_1
+         112: invokeinterface #96,  2           // InterfaceMethod scala/collection/LinearSeqOptimized.apply:(I)Ljava/lang/Object;
+         117: checkcast     #58                 // class java/lang/String
+         120: astore        4
+         122: aload_2
+         123: invokevirtual #87                 // Method scala/Option.get:()Ljava/lang/Object;
+         126: checkcast     #89                 // class scala/collection/LinearSeqOptimized
+         129: iconst_2
+         130: invokeinterface #96,  2           // InterfaceMethod scala/collection/LinearSeqOptimized.apply:(I)Ljava/lang/Object;
+         135: checkcast     #58                 // class java/lang/String
+         138: astore        5
+         140: new           #98                 // class scala/Tuple3
+         143: dup
+         144: aload_3
+         145: aload         4
+         147: aload         5
+         149: invokespecial #101                // Method scala/Tuple3."<init>":(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V
+         152: astore        6
+         154: aload         6
+         156: putfield      #103                // Field x$1:Lscala/Tuple3;
+         159: aload_0
+         160: aload_0
+         161: getfield      #103                // Field x$1:Lscala/Tuple3;
+         164: invokevirtual #106                // Method scala/Tuple3._1:()Ljava/lang/Object;
+         167: checkcast     #58                 // class java/lang/String
+         170: putfield      #31                 // Field a:Ljava/lang/String;
+         173: aload_0
+         174: aload_0
+         175: getfield      #103                // Field x$1:Lscala/Tuple3;
+         178: invokevirtual #109                // Method scala/Tuple3._2:()Ljava/lang/Object;
+         181: checkcast     #58                 // class java/lang/String
+         184: putfield      #33                 // Field b:Ljava/lang/String;
+         187: aload_0
+         188: aload_0
+         189: getfield      #103                // Field x$1:Lscala/Tuple3;
+         192: invokevirtual #112                // Method scala/Tuple3._3:()Ljava/lang/Object;
+         195: checkcast     #58                 // class java/lang/String
+         198: putfield      #35                 // Field c:Ljava/lang/String;
+         201: aload_0
+         202: aload_0
+         203: invokevirtual #73                 // Method list:()Lscala/collection/immutable/List;
+         206: astore        7
+         208: aload         7
+         210: instanceof    #114                // class scala/collection/immutable/$colon$colon
+         213: ifeq          335
+         216: aload         7
+         218: checkcast     #114                // class scala/collection/immutable/$colon$colon
+         221: astore        8
+         223: aload         8
+         225: invokevirtual #117                // Method scala/collection/immutable/$colon$colon.hd$1:()Ljava/lang/Object;
+         228: checkcast     #58                 // class java/lang/String
+         231: astore        9
+         233: aload         8
+         235: invokevirtual #120                // Method scala/collection/immutable/$colon$colon.tl$1:()Lscala/collection/immutable/List;
+         238: astore        10
+         240: aload         10
+         242: instanceof    #114                // class scala/collection/immutable/$colon$colon
+         245: ifeq          335
+         248: aload         10
+         250: checkcast     #114                // class scala/collection/immutable/$colon$colon
+         253: astore        11
+         255: aload         11
+         257: invokevirtual #117                // Method scala/collection/immutable/$colon$colon.hd$1:()Ljava/lang/Object;
+         260: checkcast     #58                 // class java/lang/String
+         263: astore        12
+         265: aload         11
+         267: invokevirtual #120                // Method scala/collection/immutable/$colon$colon.tl$1:()Lscala/collection/immutable/List;
+         270: astore        13
+         272: new           #98                 // class scala/Tuple3
+         275: dup
+         276: aload         9
+         278: aload         12
+         280: aload         13
+         282: invokespecial #101                // Method scala/Tuple3."<init>":(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V
+         285: astore        14
+         287: aload         14
+         289: putfield      #122                // Field x$2:Lscala/Tuple3;
+         292: aload_0
+         293: aload_0
+         294: getfield      #122                // Field x$2:Lscala/Tuple3;
+         297: invokevirtual #106                // Method scala/Tuple3._1:()Ljava/lang/Object;
+         300: checkcast     #58                 // class java/lang/String
+         303: putfield      #37                 // Field x:Ljava/lang/String;
+         306: aload_0
+         307: aload_0
+         308: getfield      #122                // Field x$2:Lscala/Tuple3;
+         311: invokevirtual #109                // Method scala/Tuple3._2:()Ljava/lang/Object;
+         314: checkcast     #58                 // class java/lang/String
+         317: putfield      #39                 // Field y:Ljava/lang/String;
+         320: aload_0
+         321: aload_0
+         322: getfield      #122                // Field x$2:Lscala/Tuple3;
+         325: invokevirtual #112                // Method scala/Tuple3._3:()Ljava/lang/Object;
+         328: checkcast     #124                // class scala/collection/immutable/List
+         331: putfield      #41                 // Field rest:Lscala/collection/immutable/List;
+         334: return
+         335: new           #126                // class scala/MatchError
+         338: dup
+         339: aload         7
+         341: invokespecial #129                // Method scala/MatchError."<init>":(Ljava/lang/Object;)V
+         344: athrow
+         345: new           #126                // class scala/MatchError
+         348: dup
+         349: aload_1
+         350: invokespecial #129                // Method scala/MatchError."<init>":(Ljava/lang/Object;)V
+         353: athrow
+    }
+
+List(...)是由开发库定义的抽取器(extractor)模式的实例。“cons”模式x :: xs是中缀操作符模式的特例，如果被看做是表达式，那么中缀操作与方法调用等价。
+但对于模式来说，如果被当作模式，那么类似p op q这样的中缀操作符等价于op(p, q)，中缀操作符op被当做构造器模式。在x :: xs中被看作::(x, xs)，::的全称是
+scala.::，它是可以创建非空列表的类，List中的::方法目的是实例化scala.::的对象。
+
+    // 模式匹配的插入排序
+    def isort(xs : List[Int]) : List[Int] = xs match {
+        case List() => List()
+        case x :: xsl => insert(x, isort(xsl))
+    }
+
+    def insert(x : Int, xs : List[Int]) : List[Int] = xs match {
+        case List() => List(x)
+        case y :: ys => if (x <= y) x :: xs
+                        else y :: insert(x, ys)
+    }
+
