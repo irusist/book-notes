@@ -2283,3 +2283,25 @@ scala的集合类的某些标准操作会产生可选值，例如scala的Map的g
     val results = List(Some("apple"), None, Some("orange"))
     for (Some(fruit) <- results) println(fruit)  // apple, orange
 
+## 使用列表
+列表是不可变的，列表具有递归结构（如：链接列表：linked list)，数组是连续的
+
+### List类型：
+和数组一样，列表是同质的（homogeneous)，列表的所有元素都具有相同的类型，元素类型为T的列表类型写成List[T]:
+列表是协变的（covariant)，对任意类型T的List[T]来说，List[Nothing]都是其子类。
+
+    // List()是List[Nothing]的，它是List[String]的子类，所以以下的语句是成立的
+    val x : List[String] = List()
+
+### 构造列表：
+所有的列表都是由两个基础构造块Nil和::(发音为cons)构造出来的，Nil代表空列表，中缀操作符::，表示列表从前端扩展
+
+    List(1, 2, 3)创建了列表1 :: 2 :: 3 :: Nil
+
+### 列表的基本操作
+  * head：返回列表的第一个元素
+  * tail：返回除第一个之外所有元素组成的列表
+  * isEmpty：如果列表为空，则返回true
+head和tail方法仅能够作用在非空列表上，如果执行在空列表上，会抛出异常。
+
+    Nil.head  // java.util.NoSuchElementException : head of empty list
