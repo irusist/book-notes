@@ -712,7 +712,7 @@ Function0是没有参数的函数，Function1是有一个参数的函数，每�
                 this.release = release;
             }
             public scala.Function2<java.lang.Object, java.lang.Object, java.lang.Object> test() {
-                            return release;
+                return test;
             }
             public void test_$eq(scala.Function2<java.lang.Object, java.lang.Object, java.lang.Object> test) {
                 this.test = test;
@@ -1858,7 +1858,7 @@ ScalaTest的Runner应用可以在命令行或ant任务中调用，必须指定�
       }
 
       public java.lang.String toString() {
-            return return  scala.runtime.ScalaRunTime$.MODULE$._toString(this);
+            return  scala.runtime.ScalaRunTime$.MODULE$._toString(this);
       }
 
       public boolean equals(java.lang.Object object) {
@@ -1866,8 +1866,15 @@ ScalaTest的Runner应用可以在命令行或ant任务中调用，必须指定�
                 return true;
             }
 
-            Object o = object;
-            if (o instanceOf A)
+            Object o = object;   // astore_2
+            if (o instanceOf A) {
+                A a = (A) object //astore 4
+                if (this.x() == a.x() && this.y() == a.y() && a.canEqual(this)) {
+                    return true;
+                }
+            }
+
+            return false;
       }
         Code:
            0: aload_0
@@ -1930,8 +1937,12 @@ ScalaTest的Runner应用可以在命令行或ant任务中调用，必须指定�
       public A apply(int x, int y) {
             return new A(x, y);
       }
-      public scala.Option<scala.Tuple2<java.lang.Object, java.lang.Object>> unapply(A) {
+      public scala.Option<scala.Tuple2<java.lang.Object, java.lang.Object>> unapply(A a) {
+            if (a != null) {
+                return new scala.Some(new scala.Tuple2$mcII$sp()(a.x(), a.y()));
+            }
 
+            return scala.None$.MODULE$;
       }
         Code:
            0: aload_1
@@ -2305,3 +2316,135 @@ scala的集合类的某些标准操作会产生可选值，例如scala的Map的g
 head和tail方法仅能够作用在非空列表上，如果执行在空列表上，会抛出异常。
 
     Nil.head  // java.util.NoSuchElementException : head of empty list
+
+case object可以直接用这个object名就表示这个对象，如Nil，就是case object
+
+    case object C
+    class B {
+          val c = C
+          val s = C.toString()
+    }
+    生成的java代码如下：
+    public final class C {
+      public static java.lang.String toString() {
+            return C$.MODULE$.toString();
+      }
+      public static int hashCode() {
+            return C$.MODULE$.hashCode();
+      }
+      public static boolean canEqual(java.lang.Object object) {
+            return C$.MODULE$.canEqual(object);
+      }
+      public static scala.collection.Iterator<java.lang.Object> productIterator() {
+            return C$.MODULE$.productIterator();
+      }
+      public static java.lang.Object productElement(int x) {
+            return C$.MODULE$.productElement(x);
+      }
+      public static int productArity() {
+            return C$.MODULE$.productArity();
+      }
+      public static java.lang.String productPrefix() {
+            return C$.MODULE$.productPrefix();
+      }
+    }
+
+    public final class C$ implements scala.Product,scala.Serializable {
+      public static final C$ MODULE$ = new C$();
+
+      public java.lang.String productPrefix() {
+            return "C";
+      }
+      public int productArity() {
+            return 0;
+      }
+      public java.lang.Object productElement(int index) {
+            return new java/lang/IndexOutOfBoundsException(scala.runtime.BoxesRunTime.boxToInteger(index).toString());
+      }
+        Code:
+           0: iload_1
+           1: istore_2
+           2: new           #27                 // class java/lang/IndexOutOfBoundsException
+           5: dup
+           6: iload_1
+           7: invokestatic  #33                 // Method scala/runtime/BoxesRunTime.boxToInteger:(I)Ljava/lang/Integer;
+          10: invokevirtual #36                 // Method java/lang/Object.toString:()Ljava/lang/String;
+          13: invokespecial #39                 // Method java/lang/IndexOutOfBoundsException."<init>":(Ljava/lang/String;)V
+          16: athrow
+
+      public scala.collection.Iterator<java.lang.Object> productIterator() {
+            return scala.runtime.ScalaRunTime$.MODULE$.typedProductIterator(this);
+      }
+      public boolean canEqual(java.lang.Object object) {
+            return object instanceOf C$;
+      }
+      public int hashCode() {
+            return 67;
+      }
+      public java.lang.String toString() {
+            return "C";
+      }
+      private java.lang.Object readResolve() {
+            return MODULE$;
+      }
+      private C$() {
+            super();
+            this.MODULE$ = this;
+            Product$class.$init$(this);
+      }
+    }
+
+    public class B {
+      private final C$ c;
+      private final java.lang.String s;
+
+      public C$ c() {
+            return this.c;
+      }
+
+      public java.lang.String s() {
+            return this.s;
+      }
+      public B() {
+            super();
+            this.c = C$.MODULE$;
+            this.s = C$.MODULE$.toString();
+      }
+    }
+
+    // 插入排序
+    def isort(xs : List[Int]) : List[Int] =
+        if (xs.isEmpty) Nil
+        else insert(xs.head, isort(xs.tail))
+    def insert(x : Int, xs : List[Int]) : List[Int] =
+        if (xs.isEmpty || x <= xs.head) x :: xs
+        else xs.head :: insert(x, xs.tail)
+
+###　列表模式：
+
+    val List(a, b, c) = fruit
+
+    class L {
+        val list = List("a", "b", "c")
+        val List(a, b, c) = list
+        val x :: y :: rest = list
+    }
+
+    生成的java文件为??：
+
+List(...)是由开发库定义的抽取器(extractor)模式的实例。“cons”模式x :: xs是中缀操作符模式的特例，如果被看做是表达式，那么中缀操作与方法调用等价。
+但对于模式来说，如果被当作模式，那么类似p op q这样的中缀操作符等价于op(p, q)，中缀操作符op被当做构造器模式。在x :: xs中被看作::(x, xs)，::的全称是
+scala.::，它是可以创建非空列表的类，List中的::方法目的是实例化scala.::的对象。
+
+    // 模式匹配的插入排序
+    def isort(xs : List[Int]) : List[Int] = xs match {
+        case List() => List()
+        case x :: xsl => insert(x, isort(xsl))
+    }
+
+    def insert(x : Int, xs : List[Int]) : List[Int] = xs match {
+        case List() => List(x)
+        case y :: ys => if (x <= y) x :: xs
+                        else y :: insert(x, ys)
+    }
+
