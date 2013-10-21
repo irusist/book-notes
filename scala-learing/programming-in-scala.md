@@ -2430,7 +2430,6 @@ case object可以直接用这个object名就表示这个对象，如Nil，就是
         val x :: y :: rest = list
     }
 
-<<<<<<< HEAD
     生成的java文件为：
     public class L {
       private final scala.collection.immutable.List<java.lang.String> list;
@@ -2656,9 +2655,6 @@ case object可以直接用这个object名就表示这个对象，如Nil，就是
          350: invokespecial #129                // Method scala/MatchError."<init>":(Ljava/lang/Object;)V
          353: athrow
     }
-=======
-    生成的java文件为??：
->>>>>>> bfa379b35d9ec6d6d97435d701439542e5695237
 
 List(...)是由开发库定义的抽取器(extractor)模式的实例。“cons”模式x :: xs是中缀操作符模式的特例，如果被看做是表达式，那么中缀操作与方法调用等价。
 但对于模式来说，如果被当作模式，那么类似p op q这样的中缀操作符等价于op(p, q)，中缀操作符op被当做构造器模式。在x :: xs中被看作::(x, xs)，::的全称是
