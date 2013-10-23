@@ -2672,3 +2672,111 @@ scala.::，它是可以创建非空列表的类，List中的::方法目的是实
                         else y :: insert(x, ys)
     }
 
+
+### List类的一阶方法
+一阶方法是指不以函数做入参的方法。
+
+连接列表：:::，它的两个操作数都是列表
+
+    List(1, 2) ::: List(3, 4, 5)   // List(1, 2, 3, 4, 5)
+
+    // ::: 方法用模式匹配实现
+    def append[T](xs : List[T], ys : List[T]) = xs match {
+        case List() => ys
+        case x :: xsl => x :: append(xsl, ys)
+    }
+
+计算列表的长度：length方法，这个方法是循环调用列表的元素的，因此是跟列表长度成正比，而isEmpty是循环列表，判断到Iterator的hasNext就为false
+
+    List(1, 2, 3).length // 3
+访问列表尾部：init方法和last方法：head和tail运行的时间是常量，init和last需要遍历列表，时间与列表的长度成正比。
+
+    val abcde = List('a', 'b', 'c', 'd', 'e')
+    abcde.last   // 'e'
+    abcde.init   // List('b', 'c', 'd', 'e')
+    // 对空列表调用last和init会抛出UnsupportedOperationException
+
+head：第一个元素
+last：最后一个元素
+tail：除了第一个元素的剩余元素
+init：除了最后一个的剩余元素
+
+反转列表：reverse方法：如果出于某种原因，某种算法需要频繁访问列表的尾部，那么可以首先把列表反转过来，然后再处理。
+
+  * reverse是其自身的反转xs.reverse.reverse 等价于 xs
+  * reverse把init转为tail，把last转为head，除了其中的元素是反的：
+
+        xs.reverse.init  等价于  xs.tail.reverse
+        xs.reverse.tail  等价于  xs.init.reverse
+        xs.reverse.head  等价于  xs.last
+        xs.reverse.last  等价于  xs.head
+
+        // 反转的实现,效率比较低，因为:::方法要遍历列表，它的复杂度为：n + (n-1) + ... + 1 = (1 + n) *n/2
+        def rev[T](xs : List[T]) : List[T] = xs match {
+            case List() => xs
+            case xs :: xsl => rev(xsl) ::: List(x)
+        }
+前缀与后缀：drop, take和spitAt
+xs take n 返回xs列表的前n个元素，如果n大于xs.length，则返回整个xs
+xs drop n 返回xs列表除了前n个元素之外的所有元素，如果n大于xs.length，则返回空列表。
+spitAt操作在指定位置拆分列表，并返回对偶列表（Tuple2)
+
+    xs spitAt n 等价于 (xs.take n, xs drop n) // spitAt避免了对列表xs的二次遍历。
+
+元素选择:apply方法和indices方法
+apply方法实现了随机元素的选择，一般用数组中的同名方法，这个方法的效率与n成正比，xs apply n 等价于 (xs drop n).head
+
+    abcde apply 2  // c
+    abcde(2)  // 对象作为方法调用在函数位置时，直接调用apply方法
+indices方法可以返回指定列表的所有有效索引值组成的列表
+
+zip函数：可以把两个列表组成一个对偶列表：
+
+    abcde.indices zip abcde  // List((0,a), (1,b), (2,c), (3,d), (4,e))
+如果两个列表的长度不一致，那么任何不能匹配的元素将被丢掉
+
+zipWithIndex方法更为高效，它能把列表的每个元素与元素在列表中的位置值组成一对。
+
+    abcde.zipWithIndex  // List((a,0), (b,1), (c,2), (d,3), (e,4))
+
+显示列表：toString方法和mkString方法,addString方法
+
+    val buf = new StringBuilder
+    abcde addString (buf, "(", ";", ")")
+
+转换列表：iterator, elements, toArray, copyToArray,Array.toList
+
+    // 归并排序
+    def msort(less : (T, T) => Boolean)(xs : List[T]) : List[T] = {
+        def merge(xs : List[T], ys : List[T]) : List[T] = (xs, ys) match {
+            case (Nil, _) => ys
+            case (_, Nil) => xs
+            case (x :: xsl, y :: ysl) =>
+                if (less(x, y)) x :: merge(xsl, ys)
+                else y :: merge(xs, ysl)
+        }
+
+        val n = xs.length / 2
+        if (n == 0) xs
+        else {
+            val (ys, zs) = xs splitAt n
+            merge(msort(less)(ys), msort(less)(zs))
+        }
+    }
+
+### List类的高阶方法
+高阶方法：高阶函数是以其他函数作为参数的函数。
+#### 列表间映射：map, flatMap和foreach
+flatMap的右操作元是能够返回元素列表的函数，它对列表的每个元素调用该方法，然后连接所有方法的结果并返回
+
+    // List.range(a, b)包含a，但不包含b
+    List.range(1, 5) flatMap (
+        i => List.range(1, i) map (j => (i, j))
+    )
+    // List((2, 1), (3, 1), (3, 2), (4, 1), (4, 2), (4, 3))
+    for (i <- List.range(1, 5); j <- List.range(1, i)) yield (i, j)
+foreach的右操作元是过程（返回类型为Unit的函数）。操作的结果仍是Unit不会产生结果列表。
+    var sum = 0
+    List(1, 2, 3, 4, 5) foreach (sum += _)
+#### 列表过滤：filter，partition，find，takeWhile,dropWhile和span
+
