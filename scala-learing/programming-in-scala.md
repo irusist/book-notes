@@ -3106,6 +3106,139 @@ org.stairwaybook.simulation.Simulation
 
     // http://sale.jd.com/act/H15YfXP3hJFx6b.html
 
+## 类型参数化
+私有构造器：把private修饰符添加在类参数列表的前边，私有构造器只能被类本身和伴生对象访问。
+
+    class Queue[T] private (
+        private val leading : List[T],
+        private val trailing : List[T]
+    )
+工厂方法：定义与类同名的Queue对象及apply方法
+
+    // 把这个对象放在类Queue的同一个源文件中，就变成了类的伴生对象。伴生对象可以访问类的私有构造方法
+    object Queue {
+        // 用初始元素'xs'构造队列
+        def apply[T](xs : T*) = new Queue(xs.toList, Nil)
+    }
+
+可将类定义成内部的私有类，再提供类公共接口的特质。
+
+### 变化型注解
+Queue是特质，Queue[String]，Queue[Any]是类型。Queue也被称为类型构造器。
+协变（covariant）：如果S是类型T的子类型，那么Queue[S]可以被当做Queue[T]的子类型
+默认的泛型类型是非协变的(nonvariant)子类型化
+
+定义协变的：trait Queue[+T] {...}
+定义逆变的：(contravariant)： trait Queue[-T] {...}  // 如果T是S的子类型，则Queue[S]是Queue[T]的子类型
+
+    // 如果定义如下的Cell为协变的，则编译器会报错
+    // covariant.scala:4: error: covariant type T occurs in contravariant position in type T of value x
+    //         def set(x : T) {current = x}
+    //                 ^
+    // one error found
+    class Cell[+T] (init : T)  {
+        private[this] var current = init
+        def get = current
+        // 不允许使用+号注解的类型参数用作方法参数类型
+        // 方法参数是负的位置？
+        def set(x : T) {current = x}
+    }
 
 
+    // covariant.scala:3: error: contravariant type T occurs in covariant position in type => T of method get
+    //           def get = current
+    //               ^
+    //   one error found
+    class Cell[-T] (init : T)  {
+            private[this] var current = init
+            // 不允许使用-号注解的类型参数用作方法返回的类型。
+            // 方法返回值是正的位置？
+            def get = current
+            def set(x : T) {current = x}
+    }
 
+Java中的数组是协变的。
+
+    // 能编译通过，但执行时会抛出java.lang.ArrayStoreException
+    // java在运行时保留了数组的元素类型，每次数组元素更新时，新元素都会用存储的类型校验合法性，如果不是该类型的实例，就会抛出ArrayStore异常
+    String[] a1 = {"abc"};
+    Object[] a2 = a1;
+    a2[0] = Integer.valueOf(17);
+    String s = a1[0];
+
+    // java中保留数组是协变的是因为希望有一个通用处理数组的简单方法，例如想要能够编写方法排序数组的所有元素，使用以下的方法签名带入对象数组
+    void sort(Object[] a, Comparator comp) {...}
+    // 数组的协变被用来确保任意参考类型的数组都可以传入排序方法。现在有泛型，数组的协变已经没用，只是为了兼容旧版本
+
+在scala中，Array是非协变的。为了兼容java代码，需要使用对象数组作为模拟泛型数组的手段，可以把T类型的数组造型为任意T的超类型的数组：
+
+    // 编译时scala编译器成功，运行时也是成功的。因为运用了java数组是协变的特性。
+    val a1 = Array("abc")
+    val a2 : Array[Object] = a1.asInstanceOf[Array[Object]]
+
+编译器实现的检查变化型注解的机制：（不太明白，需要看源码了解？或用多个例子说明）
+Scala编译器会把类或特质结构体的所有位置分类为正，负，或中立。所谓位置，是指类（包括类和特质）的结构体内可能会用到类型参数的地方。例如，任何方法
+的值参数都是这种位置，因为方法值参数具有类型，所以类型参数可以出现在这个位置。
+
+编译器检查类的类型参数的每一个用法。注解了+号的类型参数只能被用在正的位置上，而注解了-号的类型参数只能用在负的位置上。没有变化型注解的类型参数可以用在任何位置，
+因此它是唯一能被用在类结构体的中性位置上的类型参数。
+
+为了对这些位置分类，编译器首先从类型参数的声明开始，然后进入更深的内嵌层。处于声明类的最顶层被划为正的位置。默认情况下，更深的内嵌层的位置的分类会与它的外层一致。
+也有几种例外会改变具体的分类。方法值参数位置是方法外部位置的翻转类型。（正的翻转为负的，负的翻转为正的，中性的不变）
+
+除了方法值参数位置外，方法的类型参数的当前类别也会同时被翻转。而类型的类型参数位置，如C[Arg]中的Arg，也有可能被翻转，这取决于对应类型参数的变化型。如果C的
+类型参数标注了+号，那么类别保持不变，如果C的类型参数标注了-号，那么当前类别被翻转，如果C的类型参数没有变化型注解，那么当前类型将改为中性。
+
+    // 类型参数W。以及2个值参数，volume, listener的位置都是负的。meow的结果类型，第一个Cat[U, T]参数的位置是负的，因为Cat的第一个类型参数T被标注了-号
+    // 这个参数中的类型U重新转为正的位置（两次翻转）,而参数中的类型T仍然为负的位置
+    // 方法的类型参数，如W会翻转，方法的参数会翻转，方法的返回值不会变，默认内嵌的与外部的一致，但是如Cat类型的，如果定义成+的则不变，如果定义成-的则翻转，没有变化型注解则改为中性。
+    abstract class Cat[-T, +U] {
+        def meow[W-](volume :　T-, listener : Cat[U+, T-]-) : Cat[Cat[U+, T-]-, U+]+
+    }
+
+
+### 下界
+可以通过把append变为多态以使其泛型化（即提供给append方法类型参数）并使用它的类型参数下界，
+
+    class Queue[+T] (
+        private val leading : List[T],
+        private val trailing : List[T]) {
+            // 定义了append类型参数U，并通过语法U >: T，定义了T为U的下界，因此，U必须是T的超类型。（对自身来讲，既是子类型也是超类型，即使T是U的下界，仍然能够把T传给append方法）
+            // 这里发生了下界的翻转，类型参数U处于负的位置（1次翻转），而下界(>: T)处于正的位置（2次翻转）
+            def append[U >: T] (x : U) = new Queue[U](leading, x :: trailing)
+        }
+        // Fruit有2个子类型：Apple和Orange，可以调用append(Orange)把Orange加入到Queue[Apple]，返回Queue[Apple]，这里通过泛型，把Orange当做Apple
+
+         class T[+A, -B] {
+              // error: contravariant type B occurs in covariant position in type  >: B of type C
+              //      def test[C >: B](c : C) : C
+              //               ^
+              // one error found
+              // 由于C是非协变的，所以C可以出现在任何地方
+              // C的位置是负的，而下界>:会翻转类型，所以B的位置翻转成正的位置，而B是逆变的，所以出错。如果是下界，则不会翻转类型
+              // 方法类型中好像不能定义协变或逆变？？？
+              def test[C >: B](c : C) : C
+         }
+
+类型系统的通用原则：如果能在需要类型U的值的地方替换成类型T的值，那么类型T是类型U的子类的假设就是安全的。这被称为里氏替代原则(Liskov Substitution Principle LSP)
+原则的前提是T要支持U所支持的操作并且对于T的所有操作来说，与U的对应操作比较，需求的要更少，而提供的要更多。（参数是需求的东西，结果是提供的东西）
+Function1[A, B]的定义：
+
+    trait Function1[-S, +T] {
+        def apply(x : S) : T
+    }
+Function1的继承关系与它的返回值的继承关系一样
+
+对象私有成员private[this]仅能在被定义的对象内部访问，而在它们被定义的同一个对象内访问这些变量并不会引起与变化型有关的问题，
+scala变化型规则包含了关于对象私有定义的特例：当检查到带有+/-号的类型参数只出现在具有相同变化型分类的位置上时，这种定义将被忽略。
+
+    //  covariant type T occurs in contravariant position in type T of value a_=
+    //  class B[+T] (
+    //        ^
+    //  one error found
+    // 在生成的set方法中用T作为参数了，参数是逆变的。
+    // 在这里把a定义成val则不会出现这个问题，因为val不会有set方法
+    // 或者将a定义成private[this] var a : T，因为对象私有定义有特例。
+    class B[+T] (
+          var a : T
+    )
