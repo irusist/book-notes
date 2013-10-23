@@ -2672,7 +2672,6 @@ scala.::，它是可以创建非空列表的类，List中的::方法目的是实
                         else y :: insert(x, ys)
     }
 
-
 ### List类的一阶方法
 一阶方法是指不以函数做入参的方法。
 
@@ -2780,3 +2779,104 @@ foreach的右操作元是过程（返回类型为Unit的函数）。操作的结
     List(1, 2, 3, 4, 5) foreach (sum += _)
 #### 列表过滤：filter，partition，find，takeWhile,dropWhile和span
 
+xs filter p操作把类型为List[T]的列表xs和类型为T => Boolean的论断函数作为操作元，产生xs中符合p(x)为true的所有元素x组成的列表
+partition方法与filter类似，不过返回的是列表对，其中一个包含所有论断为真的元素，另一个包含所有论断为假的元素。等价于
+
+    xs partition p 等价于 (xs filter p, xs filter (!p(_))
+
+find方法同样于filter类似，不过返回的是第一个满足给定论断的元素，而非全部。xs find p操作返回可选值。如果xs中存在元素x使得p(x)为真，Some(x)将返回，
+否则，若p对所有元素都不成立，None将返回.
+xs takeWhile p操作返回列表xs中最长的能够满足p的前缀，xs dropWhile p操作移除最长的能够满足p的前缀。
+span方法把takeWhile和dropWhile组成一个操作，就像splitAt。 xs span p 等价于 (xs takeWhile p, xs dropWhile p)
+
+    List(1, 2, 3, -4, 5) span (_ > 0)  // (List(1, 2, 3), List(-4, 5))
+#### 列表的论断：forall，exists
+xs forall p：如果列表的所有元素满足p则返回true
+xs exists p：xs中只要有一个值满足论断p就返回true
+
+#### 折叠列表：/:和:\
+
+    sum(List(a, b, c))  等价于  0 + a + b + c
+    def sum(xs : List[Int]) : Int = (0 /: xs) (_ + _)
+    product(List(a, b, c)  等价于  1 * a * b * c
+    def product(xs : List[Int]) : Int = (1 /: xs) (_ * _)
+    (List(a, b, c) :\ s) (op) 等价于  op(a, op(b, op(c, z)))
+
+     // flattenRight性能更高，因为xs ::: ys的耗时与第一个参数xs的长度成正比,而flattenLeft的左操作数越来越大
+    def flattenLeft(xss : List[List[T]]) =
+        (List[T]() /: xss) (_ ::: _)
+    def flattenRight(xss : List[List[T]] =
+        (xss :\ List[T]()) (_ ::: _)
+另一种reverse实现：
+
+    def reverseLeft[T](xs : List[T]) =
+        (List[T]() /: xs) ((ys, y) => y :: ys)
+
+#### 列表排序:sort
+
+    List(1, -3, 4, 2, 6) sort (_ < _)
+
+### List对象的方法
+#### 通过元素创建列表：List.apply
+
+        List(1, 2, 3) 等价于 List.apply(1, 2, 3)
+#### 创建数值范围：List.range
+#### 创建统一的列表：List.make
+
+        List.make(5, 'a')   // List(a, a, a, a, a)
+#### List.unzip
+
+        val zipped = "abcde".toList zip List(1, 2, 3)
+        List.unzip(zipped)  // (List(a, b, c), List(1, 2, 3))
+#### 连接列表：List.flatten, List.concat
+
+        val xss = List(List('a', 'b'), List('c'), List('d', 'e'))
+        List.flatten(xss)   // List(a, b, c, d, e)
+
+        List.concat(List('a', 'b'), List('c'))  // List(a, b, c)
+        List.concat(List(), List('a'), List('c'))  // List(a, b, c)
+        List.concat()  // List[Noting] List()
+
+#### 映射及测试配对列表:List.map2, List.forall2, List.exists2
+
+        List.map2(List(10, 20), List(3, 4, 5)) (_ * _) // List(30, 80)
+        List.forall2(List("abc", "de"), List(3, 2)) (_.length == _)  // true
+        List.exists2(List("abc", "de"), List(3, 2)) (_.length != _)   // false
+
+scala的类型推断是基于流的，在m(args)的方法调用中，（类型）推断器首先检查方法m是否有已知类型，如果有，那么这个类型将被用来做参数预期类型的推断。
+如：abcde sort (_ > _)中，abcde的类型是List[Char],因此就明确了sort的参数类型为(Char, Char) => Boolean，并且产生的结果类型为List[Char]
+推断器能推断出(_ > _)可以被扩展为(x : Char, x : Char) => x > y.
+
+而msort((x : Char, y : Char) => x > y)(abcde)不能用msort(_ > _)(abcde),因为不能根据msort来知道确切的类型，可以如下解决：
+
+    msort[Char](_ > _)(abcde)或者
+    def msortSwapped[T](xs : List[T])(less : (T, T) => Boolean) : List[T] = {//}
+通常，一旦需要推断多态方法类型参数的任务时，类型推断器就只会参考第一个参数列表中所有的值的参数类型，但不会参考之后其他的参数。
+
+如果需要把参数设计为若干非函数值及一个函数值的某种多态方法，需要把函数参数独自放在柯里化参数列表的最后面，
+这样一来，方法的正确实例类型就可以通过非函数参数推断出来，并且这个类型可以转而用来完成函数参数的类型检查。
+
+(xs :\ z) (op)这里(xss :\ List()) (_ ::: _)会编译失败，因为z是空列表List(),没有任何附加类型信息，所以它的类型就被推断为List[Nothing],
+这样，推断器ui认为折叠操作的类型B是List[Nothing]，结果折叠的(_ ::: _)操作被预期为如下类型：
+
+        (List[T], List[Nothing]) => List[Nothing]，这意味着输入，输出始终是空列表，
+在柯里化方法中，方法类型仅取决于第一段参数
+
+函数式语言如ML或Haskell采用的是全局化的Hindley-Milner类型推断方法。
+
+## 集合类型
+scala.Iterable：Iterable是主要特质，它同时还是可变和不可变序列(scala.collection.Seq), 集（scala.collection.Set),
+以及映射(scala.collection.Map)的超特质
+序列是有序的集合，例如数组和列表，集可以通过==方法确定对每个对象最多只包含一个，映射则包含了键值映射关系的集合.
+
+特质Iterator扩展了AnyRef，Iterable与Iterator之间的差异在于特质Iterable指代的是可以被枚举的类型（如集合类型），而特质Iterator是用来执行枚举操作的机制
+Iterator可以被枚举若干次，但Iterator仅能使用一次，一旦使用Iterator枚举遍历了集合对象，就不能再使用它了。
+
+
+### 序列
+序列是继承特质Seq的类，序列的元素的有序的。
+列表：List，索引访问比较慢
+数组：Array，索引高效访问,可以使用返回数组的java方法。
+列表缓存：ListBuffer，可变对象，在scala.collection.mutable包中。能够支持常量时间的添加和前缀操作。元素的添加食用+=，前缀食用++操作符。调用toList方法得到List
+使用ListBuffer代替List的另一个理由是为了避免堆栈溢出的风险。即使可以使用前缀的方法以正确的次序构建列表，但是递归算法不是尾递归，可以用for表达式或while循环及ListBuffer替代。
+List类能够提供的对列表头部，而非尾部的快速访问，因此，如果需要通过向结尾添加对象的方式建造列表，可以先对表头前缀元素的方式反向构造列表，完成之后再调用reverse使得元素反转。
