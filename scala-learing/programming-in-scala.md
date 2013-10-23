@@ -2777,8 +2777,8 @@ flatMap的右操作元是能够返回元素列表的函数，它对列表的每�
 foreach的右操作元是过程（返回类型为Unit的函数）。操作的结果仍是Unit不会产生结果列表。
     var sum = 0
     List(1, 2, 3, 4, 5) foreach (sum += _)
-#### 列表过滤：filter，partition，find，takeWhile,dropWhile和span
 
+#### 列表过滤：filter, partition, find, takeWhile, dropWhile和span
 xs filter p操作把类型为List[T]的列表xs和类型为T => Boolean的论断函数作为操作元，产生xs中符合p(x)为true的所有元素x组成的列表
 partition方法与filter类似，不过返回的是列表对，其中一个包含所有论断为真的元素，另一个包含所有论断为假的元素。等价于
 
@@ -2875,8 +2875,237 @@ Iterator可以被枚举若干次，但Iterator仅能使用一次，一旦使用I
 
 ### 序列
 序列是继承特质Seq的类，序列的元素的有序的。
-列表：List，索引访问比较慢
-数组：Array，索引高效访问,可以使用返回数组的java方法。
-列表缓存：ListBuffer，可变对象，在scala.collection.mutable包中。能够支持常量时间的添加和前缀操作。元素的添加食用+=，前缀食用++操作符。调用toList方法得到List
+
+   * 列表：List，索引访问比较慢
+   * 数组：Array，索引高效访问,可以使用返回数组的java方法。
+   * 列表缓存：ListBuffer，可变对象，在scala.collection.mutable包中。能够支持常量时间的添加和前缀操作。元素的添加食用+=，前缀食用++操作符。调用toList方法得到List
 使用ListBuffer代替List的另一个理由是为了避免堆栈溢出的风险。即使可以使用前缀的方法以正确的次序构建列表，但是递归算法不是尾递归，可以用for表达式或while循环及ListBuffer替代。
 List类能够提供的对列表头部，而非尾部的快速访问，因此，如果需要通过向结尾添加对象的方式建造列表，可以先对表头前缀元素的方式反向构造列表，完成之后再调用reverse使得元素反转。
+数组缓存
+   * 数组缓存：ArrayBuffer,与数组类似，只是额外还允许在序列的开始或结束的地方添加和删除元素。所有的Array操作都被保留，新的添加
+和删除操作平均为常量时间，但偶尔会因为实现申请分配新的数组以保留缓存内容而需要线性的处理时间。
+
+    import scala.collection.mutable.ArrayBuffer
+    // 创建ArrayBuffer时，必须指定它的类型参数，可以不用指定长度。ArrayBuffer可以自动调整分配的空间
+    val buff = new ArrayBuffer[Int]()
+    // 用+=操作添加元素
+    buf += 12
+    buf += 15
+    buf // ArrayBuffer(12, 15)
+    // 所有数组能用的方法ArrayBuffer都能使用
+    buf.length
+    buf(0)
+   * 队列：Queue，有可变和不可变的序列
+
+        import scala.collection.immutable.Queue
+        val empty = new Queue[Int]
+        val has1 = empty.enqueue(1)
+        val has123 = has1.enqueue(List(2, 3))
+        val (element, has23) = has123.dequeue
+        // 可变队列使用+=及++=来添加元素，对于可变队列，dequeue方法将只从队列移除元素头并返回。
+   * 栈：Stack，有可变和不可变版本，push,pop,top方法
+   * 字符串：经RichString隐式转换，RichString的类型为Seq[Char]
+
+        // String并没有定义exists方法，隐式转换会将它转换为RichString类
+        def hasUpperCase(s : String) = s.exists(_.isUpperCase)
+
+### 集Set和映射Map
+默认使用的是不可变版本，
+
+    object Predef {
+        // type关键字用来把Set和Map定义为不可变集和映射特质的全引用名的别名
+        type Set[T] = scala.collection.immutable.Set[T]
+        type Map[K, V] = scala.collection.immutable.Map[K, V]
+        // val把Set和Map初始化为指向不可变Set和Map的单例对象。
+        val Set = scala.collection.immutable.Set
+        val Map = scala.collection.immutable.Map
+    }
+
+    import scala.collection.mutable
+    val text = "See Spot run. Run, Spot, Run!"
+    val wordsArray = text.split("[ !.,]+")
+    val words = mutable.Set.empty[String]
+    for (word <- wordsArray) words += word.toLowerCase
+Set的常用操作
+操作                                      行为
+val nums = Set(1, 2, 3)                   创建不可变集(nums.toString返回Set(1, 2, 3)
+nums + 5                                    添加元素（返回Set(1, 2, 3, 5)
+nums - 3                                    删除元素（返回Set(1, 2))
+nums ++ List(5, 6)                          添加多个元素Set(1, 2, 3, 5, 6)
+nums -- List(1, 2)                          删除多个元素Set(3)
+nums ** Set(1, 3, 5, 7)                     获得交集Set(3)
+nums.size                                   返回对象数量:3
+nums.contains(3)                            检查是否包含（true）
+import scala.collection.mutable             引用可变集合类型
+val words = mutable.Set.empty[String]       创建空可变集（words.toString返回Set())
+words += "the"                              添加元素)words.toString返回Set(the))
+words -= "the"                              如果存在元素，则删除(words.toString返回Set())
+words ++= List("do", "re", "mi")            添加多个元素(words.toString返回Set(do, re, mi))
+wrods --= List("do", "re")                  删除多个元素(words.toString返回Set(mi))
+words.clear                                 删除所有元素(words.toString返回Set())
+
+     import scala.collection.mutable
+     val map = mutable.Map.empty[String, Int]
+     map("hello") = 1
+     map("hello")   // 1
+#### 映射常用操作
+操作                                         行为
+val nums = Map("i" -> 1, "ii" -> 2)         创建不可变映射(nums.toString返回Map(i->1, ii->2)
+nums + ("vi" -> 6)                          添加条目（返回Map(i->1, ii->2, vi->6)
+nums - "ii"                                 删除条目（返回Map(i->1)）
+nums ++ List("iii"->3, "v"->5)              添加多个条目（返回Map(i->1, ii->2, iii->3, v->5)
+nums -- List("i", "ii")                     删除多个条目（返回Map())
+nums.size                                   返回映射条目(2)
+nums.contains("ii")                         true
+nums("ii")                                  2
+nums.keys                                   返回键枚举器（返回字符串i和ii的Iterator)
+nums.keySet                                 Set(i, ii)
+nums.values                                 返回枚举器（返回整数1和2的Iterator)
+nums.isEmpty                                指明映射是否为空（false）
+import scala.collection.mutable
+val words = mutable.Map.empty[String, Int]
+words += ("one" -> 1)                       words.toString返回Map(one->1)
+words -= "one"                              words.toString返回Map()
+words ++= List("one"->1, "two"->2, "three"->3)  words.toString返回Map(one->1, two->2, three->3)
+words --= List("one", "two")                words.toString返回Map(three->3)
+
+scala.collection.mutable.Set()工厂方法返回scala.collection.mutable.HashSet
+scala.collection.mutable.Map()工厂方法返回scala.collection.mutable.HashMap
+#### 默认的不可变集实现
+元素数量               实现
+0                       scala.collection.immutable.EmptySet
+1                       scala.collection.immutable.Set1
+2                       scala.collection.immutable.Set2
+3                       scala.collection.immutable.Set3
+4                       scala.collection.immutable.Set4
+5或更多                  scala.collection.immutable.HashSet
+默认的不可变映射实现
+元素数量                实现
+0                       scala.collection.immutable.EmptyMap
+1                       scala.collection.immutable.Map1
+2                       scala.collection.immutable.Map2
+3                       scala.collection.immutable.Map3
+4                       scala.collection.immutable.Map4
+5                       scala.collection.immutable.HashMap
+如果向EmptySet添加元素返回Set1，Set1添加元素返回Set2，Set2删除元素返回Set1
+
+#### 有序的（Sorted）集和映射
+SortedSet,SortedMap特质，这2个特质分别由类TreeSet和TreeMap实现，使用红黑树保存元素和键
+集的元素类型或映射的键类型必须要么混入，要么能隐式转换成Ordered特质。这些类只有不可变的版本。
+
+    import scala.collection.immutable.TreeSet
+     // ts : scala.collection.immutable.SortedSet[Int] = Set(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+    val ts = TreeSet(9, 3, 1, 8, 0, 2, 7, 4, 6, 5)
+    // cs : scala.collection.immutable.SortedSet[Char] = Set(f, n, u)
+    val cs = TreeSet('f', 'u', 'n')
+
+    import scala.collection.immutable.TreeMap
+    // scala.collection.immutable.SortedMap[Int, Char] = Map(1->x, 3->x, 4->x)
+    var tm = TreeMap(3 -> 'x', 1 -> 'x', 4 -> 'x')
+    // // scala.collection.immutable.SortedMap[Int, Char] = Map(1->x, 2->x, 3->x, 4->x)
+    tm += (2 -> 'x')
+
+#### 同步集和映射
+SynchronizedMap特质
+
+    import scala.collection.mutable.{Map, SynchronizedMap, HashMap}
+    object MapMaker {
+        def makeMap : Map[String, String] = {
+            new HashMap[String, String] with SynchronizedMap[String, String] {
+                //  在键查询不到值时返回这个方法的内容
+                override def default(key : String) = "Why do you want to know?"
+            }
+        }
+    }
+
+    // 把不可变集合义成val，则不能有+=方法，因为不可变Set没有这个方法，如果定义成var则可以，因为他转换成 a = a + b
+    // 操作符适用于+=, -=, ++=, --=
+    var people = Set('a', 'b')
+    people += 'c' // 转换成people = people + 'c'
+
+scala以等号结尾的都可以做方法优化
+
+#### 初始化集合
+
+    val stuff = mutable.Set[Any](42) // 可以添加任何数据
+    val colors = List("blue", "yellow", "red", "green")
+    val treeSet = TreeSet[String]() ++ colors // 不能直接用val treeSet = TreeSet(colors)
+
+List.toArray, Array.toList操作需要复制集合的所有元素，对大型集合而言，速度比较慢
+
+可变集合转换为不可集合：可以先创建空不可变集合，把可变集合的元素用++操作符添加进去
+
+    // scala.collection.mutable.Set[String]
+     val treeSet = TreeSet[String]() ++ colors
+     // mutaSet : scala.collection.mutable.Set[String]
+     val mutaSet = mutabl.Set.empty ++ treeSet
+     // immutaSet : scala.collection.immutable.Set[String]
+     val immutSet = Set.empty ++ mutaSet
+     // muta : scala.collection.mutable.Map[String, Int]
+     val muta = mutable.Map("i"->1)
+     // immu : scala.collection.immutable.Map[String, Int]
+     val immu = Map.empty ++ muta
+
+### 元组
+元组可以保存不同类型的对象:(1, "hello", Console)
+访问元组的元素，用方法_1访问第一个元素，_2访问第2个元素
+
+    val (word, idx) = longest // 元组的模式匹配
+    val word, idx = longest // 将word和idx分别赋值longest
+
+## 有状态的对象
+在类中定义的var变量x的get方法名为x，set方法名为x_=（编译成字节码是x_$eq, 符号=转义成$eq)，字段x的访问权限是private[this],
+get方法和set方法与var x的访问权限相同，public/protected/private
+
+可以直接定义getter和setter方法以取代定义var变量，通过直接定义这些访问方法，可以按照自己的意愿解释对变量的访问和赋值操作：
+
+    class Time {
+        private[this] var h = 12
+        private[this] var n = 12
+
+        // 重新定义getter和setter方法，编译器会优先取自己的定义的，不会再额外生成,这里重新定义了hour和minute的方法
+        def hour : Int = h
+        def hour_=(x : Int) {
+            require(0 <= x && x < 24)
+            h = x
+        }
+
+        def minute = m
+        def minute_= (x : Int) {
+            require(0 <= x && x < 60)
+            m = x
+        }
+    }
+
+可以只定义getter和setter方法而不定义关联的字段
+
+    class Thermometer {
+        // 这里的_表示变量的初始化值，在这里Float的初始化值为0，因此把0赋值给celsius
+        // 对数值来说，初始化值为0，布尔值是false，引用类型为null，与java一样
+        // scala中不能省略= _，如果写成var celsius : Float,这将定义为抽象变量，而不是未初始化的变量,他的getter和setter方法都是abstract的
+        var celsius : Float = _
+        def fahrenheit = celsius * 9 / 5 + 32
+        def fahrenheit_= (f : Float) {
+            celsius = (f - 32) * 5 / 9
+        }
+        override def toString = fahrenheit + "F/" + celsius + "C"
+    }
+
+    val t = new Thermometer
+    t.celsius = 100  // 这里调用celsius_=()方法
+    t.fahrenheit = -40  // 这里调用fahrenheit_=()方法
+
+### Simulation API
+org.stairwaybook.simulation.Simulation
+
+    // 把Action定义为带空参数列表并返回Unit的过程的别名，编译器只是将出现Action的地方替换成scala.Function0<scala.runtime.BoxedUnit>
+    type Action = () => Unit
+
+延迟方法：抽象方法，具体的定义将推迟到子类完成，延迟方法的名称开始于大写字母，因为它们代表的是常量。
+又因为它们是方法，所以可以在子类中重载。
+
+    // http://sale.jd.com/act/H15YfXP3hJFx6b.html
+
+
+
+
