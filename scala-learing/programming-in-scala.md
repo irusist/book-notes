@@ -2757,3 +2757,20 @@ scala的类型推断是基于流的，在m(args)的方法调用中，（类型�
 在柯里化方法中，方法类型仅取决于第一段参数
 
 函数式语言如ML或Haskell采用的是全局化的Hindley-Milner类型推断方法。
+
+## 集合类型
+scala.Iterable：Iterable是主要特质，它同时还是可变和不可变序列(scala.collection.Seq), 集（scala.collection.Set),
+以及映射(scala.collection.Map)的超特质
+序列是有序的集合，例如数组和列表，集可以通过==方法确定对每个对象最多只包含一个，映射则包含了键值映射关系的集合.
+
+特质Iterator扩展了AnyRef，Iterable与Iterator之间的差异在于特质Iterable指代的是可以被枚举的类型（如集合类型），而特质Iterator是用来执行枚举操作的机制
+Iterator可以被枚举若干次，但Iterator仅能使用一次，一旦使用Iterator枚举遍历了集合对象，就不能再使用它了。
+
+
+### 序列
+序列是继承特质Seq的类，序列的元素的有序的。
+列表：List，索引访问比较慢
+数组：Array，索引高效访问,可以使用返回数组的java方法。
+列表缓存：ListBuffer，可变对象，在scala.collection.mutable包中。能够支持常量时间的添加和前缀操作。元素的添加食用+=，前缀食用++操作符。调用toList方法得到List
+使用ListBuffer代替List的另一个理由是为了避免堆栈溢出的风险。即使可以使用前缀的方法以正确的次序构建列表，但是递归算法不是尾递归，可以用for表达式或while循环及ListBuffer替代。
+List类能够提供的对列表头部，而非尾部的快速访问，因此，如果需要通过向结尾添加对象的方式建造列表，可以先对表头前缀元素的方式反向构造列表，完成之后再调用reverse使得元素反转。
