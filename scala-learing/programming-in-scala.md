@@ -3242,3 +3242,855 @@ scala变化型规则包含了关于对象私有定义的特例：当检查到带
     class B[+T] (
           var a : T
     )
+
+## 抽象成员
+抽象成员可以是类型(T),方法,val,以及var
+
+    trait Abstract {
+        type T     // 类型
+        def transform(x : T) T // 方法
+        val initial : T  // val
+        var current : T  // var
+    }
+
+    class Concrete extends Abstract {
+        type T = String
+        def transform(x : String) = x + x
+        val initial = "hi"
+        var current = initial
+    }
+
+抽象类型是指不带具体定义的，（由type关键字）声明为类或特质成员的类型。上面的T
+
+### 抽象val
+抽象val: val initial : String，它指定了val的名称和类型，但不指定值。该值必须由子类的具体val定义提供。
+抽象val声明类似于抽象的无参方法声明：def initial : String
+
+抽象的val的任何实现都必须是val类型的定义，不可以是var或def，抽象方法声明可以被实现为具体的方法定义或具体的val定义。
+
+### 抽象var
+抽象var只声明名称和类型，没有初始值
+
+    trait AbstractTime {
+        var hour : Int
+        var minute : Int
+    }
+    与下面的等价
+    trait AbstractTime {
+        def hour : Int // hour 的getter方法
+        def hour_=(x : Int) // hour的setter方法
+        def minute : Int // minute的getter方法
+        def minute_=(x : Int) // minute的setter方法
+    }
+
+抽象val可用作超类的参数的角色
+
+    trait RationalTrait {
+        val numerArg : Int
+        val denomArg : Int
+    }
+    // 实现上面的特质：这个表达式可以产生混入了特质并被结构体定义的匿名类实例。类似于new Rational(1, 2)
+    new RationalTrait {
+        val numerArg = 1
+        val denomArg = 2
+    }
+
+    // 两个表达式expr1,expr2会在类Rational初始化之前计算。
+    new Rational(expr1, expr2)
+
+    // 表达式expr1, expr2被作为匿名类初始化的一部分计算，匿名类的初始化在RationalTrait之后
+    // 在RationalTrait初始化的时候，numrArg和denomArg的值为默认值0
+    new RationalTrait {
+        val numerArg = expr1
+        val denomArg = expr2
+    }
+
+
+    trait T {
+        val a : Int
+        val b : Int
+        println("t")
+    }
+
+    class C {
+        def test() {
+            new T {
+                val a = 1
+                val b = 2
+            }
+        }
+    }
+    这个代码生成的java代码如下：
+    public interface T {
+      public abstract int a();
+      public abstract int b();
+    }
+
+    public abstract class T$class {
+      public static void $init$(T) {
+          scala.Predef$.MODULE$.println("t");
+      }
+    }
+
+    public class C {
+      public void test() {
+            new C$$anon$1(this);
+      }
+      public C() {
+            super();
+      }
+    }
+
+    public final class C$$anon$1 implements T {
+      private final int a;
+      private final int b;
+      public int a() {
+            return a;
+      }
+      public int b() {
+            return b;
+      }
+
+      // 在这里，混入了trait之后，先调用类的父类构造方法，再调用被混入的trait的$init$方法（非val, var, def定义）
+      // 最后调用类自身的一些字段赋值，初始化等。
+      public C$$anon$1(C) {
+            super();
+
+            T$class.$init$(this);
+            this.a = 1;
+            this.b = 2;
+      }
+    }
+
+### fields预初始化字段
+预初始化字段，可以在调用超类之前初始化子类的字段。操作方式是把字段定义加上化括号，放在超类构造器调用之前。
+预初始化字段并不仅限于匿名类，它们还可以被用作于对象或有名称的子类。
+
+       class C {
+           def test() {
+               new  {
+                   val a = 1
+                   val b = 2
+               } with T
+           }
+       }
+       生成的java代码如下：
+       public class C {
+         public void test() {
+             new C$$anon$1(this);
+         }
+
+         public C() {
+                super();
+         }
+       }
+
+       public final class C$$anon$1 implements T {
+         private final int a;
+         private final int b;
+         public int a() {
+                return a;
+         }
+         public int b() {
+                return b;
+         }
+
+         // 这里字段的初始化在调用被混入trait之前。
+         public C$$anon$1(C) {
+                this.a = 1;
+                this.b = 2;
+                super();
+                T$class.$init$(this);
+         }
+       }
+
+对不是匿名类的一般类也同样适用：将初始化内容放在extends 之后，trait名之前
+
+    object O extends {
+        val a = 1
+        val b = 2
+    } with T
+
+    生成的java代码如下：
+    public final class O {
+      public static int b() {
+            return O$.MODULE$.b();
+      }
+      public static int a() {
+            return O$.MODULE$.a();
+      }
+    }
+
+    public final class O$ implements T {
+      public static final O$ MODULE$ = new O$();
+      private final int a;
+      private final int b;
+      public int a() {
+            return a;
+      }
+      public int b() {
+            return b;
+      }
+      private O$() {
+            this.a = 1;
+            this.b = 1;
+            super();
+            this.MODULE$ = this;
+            T$class.$init$(this);
+      }
+    }
+
+
+    object O T {
+        val a = 1
+        val b = 2
+    }
+    生成的java代码如下：
+    public final class O {
+      public static int b() {
+         return O$.MODULE$.b();
+      }
+      public static int a() {
+            return O$.MODULE$.a();
+      }
+    }
+
+    public final class O$ implements T {
+      public static final O$ MODULE$ = new O$();
+      private final int a;
+      private final int b;
+      public int a() {
+            return a;
+      }
+      public int b() {
+            return b;
+      }
+
+      // 默认情况下，字段的赋值是在调用了父类构造方法和trait的初始化方法之后
+      private O$() {
+            super();
+            this.MODULE$ = this;
+            T$class.$init$(this);
+            this.a = 1;
+            this.b = 2;
+      }
+    }
+
+由于预初始化的字段在超类构造其调用之前被初始化，因此它们的初始化器不能引用正被构造的对象。如果有引用this的这种初始化
+构造器，那么实际指向的是包含了正被构造的类或对象的对象，而不是被构造对象本身。
+
+    // 这里的this代表的是T的对象，而不是T的对象，如果T没有a和b字段，会报错
+    class T {
+        def test() {
+            new {
+                // this通过匿名类调用外部类得到，匿名类的构造方法用外部类的引用作为参数
+                val a = this.a
+                val b = this.b
+            } with T
+        }
+    }
+
+    // 这里的类参数只提供参数，没提供字段，在构造器中被numerArg和denomArg调用
+    class RationalClass(n : Int, d : Int) extends {
+        val numerArg = n
+        val denomArg = d
+    } with RationalTrait {
+        def +(that : RationalClass) =
+            new RationalClass(numer * that.denom + that.numer * denom, denom * that.denom)
+    }
+
+### 懒加载
+如果把lazy修饰符放在val定义的前面，那么右侧的初始化表达式将直到val第一次被使用的时候才计算。 通过设置一个volatile的布尔变量控制第一次访问执行
+
+    object Demo {
+        val x = {println("initializing x"); "done"}
+    }
+    class L {
+          Demo
+         val d =  Demo.x
+    }
+
+    编译成java代码如下
+    public final class Demo {
+      public static java.lang.String x() {
+            return Demo$.MODULE$.x();
+      }
+    }
+
+    public final class Demo$ {
+      public static final Demo$ MODULE$ = new Demo$();
+      private final java.lang.String x;
+      public java.lang.String x() {
+            return this.x;
+      }
+      private Demo$() {
+            super();
+            this.MODULE$ = this;
+            scala.Predef$.MODULE$.println("initializing x");
+            this.x = "done";
+      }
+    }
+
+    public class L {
+      private final java.lang.String d;
+      public java.lang.String d() {
+            return this.d;
+      }
+      public L() {
+            super();
+            // 调用Demo
+            Demo$.MODULE$;
+            // 调用Demo.x
+            this.d = Demo$.MODULE$.x();
+      }
+    }
+
+
+
+
+    object Demo {
+        lazy val x = {println("initializing x"); "done"}
+    }
+    class L {
+          Demo
+          val d =  Demo.x
+    }
+
+    生成的java代码如下：
+    public final class Demo {
+      public static java.lang.String x() {
+            return Demo$.MODULE$.x();
+      }
+    }
+
+    // 一部分字节码未解析完成
+    public final class Demo$ {
+      public static final Demo$ MODULE$ = new Demo$();
+      private java.lang.String x;
+      private volatile boolean bitmap$0;
+      private java.lang.String x$lzycompute() {
+            synchronized (this) {
+                if (!this.bitmap$0) {
+                    scala.Predef$.MODULE$.println("initializing x");
+                    this.x = "done";
+                    // 布尔值在虚拟机内部是以0或1来表示的，1表示true，0表示false
+                    this.bitmap$0 = true;
+                }
+
+                scala.runtime.BoxedUnit.UNIT
+            }
+
+            return this.x;
+      }
+        Code:
+           0: aload_0
+           1: dup
+           2: astore_1
+           3: monitorenter
+           4: aload_0
+           5: getfield      #20                 // Field bitmap$0:Z
+           8: ifne          30
+          11: aload_0
+          12: getstatic     #25                 // Field scala/Predef$.MODULE$:Lscala/Predef$;
+          15: ldc           #27                 // String initializing x
+          17: invokevirtual #31                 // Method scala/Predef$.println:(Ljava/lang/Object;)V
+          20: ldc           #33                 // String done
+          22: putfield      #35                 // Field x:Ljava/lang/String;
+          25: aload_0
+          26: iconst_1
+          27: putfield      #20                 // Field bitmap$0:Z
+          30: getstatic     #41                 // Field scala/runtime/BoxedUnit.UNIT:Lscala/runtime/BoxedUnit;
+          33: pop
+          34: aload_1
+          35: monitorexit
+          36: aload_0
+          37: getfield      #35                 // Field x:Ljava/lang/String;
+          40: areturn
+          41: aload_1
+          42: monitorexit
+          43: athrow
+        Exception table:
+           from    to  target type
+               4    36    41   any
+
+      public java.lang.String x() {
+            if (!this.bitmap$0) {
+                return this.x$lzycompute();
+            } else {
+                return this.x;
+            }
+      }
+        Code:
+           0: aload_0
+           1: getfield      #20                 // Field bitmap$0:Z
+           4: ifeq          14
+           7: aload_0
+           8: getfield      #35                 // Field x:Ljava/lang/String;
+          11: goto          18
+          14: aload_0
+          15: invokespecial #46                 // Method x$lzycompute:()Ljava/lang/String;
+          18: areturn
+
+      private Demo$() {
+            super();
+            this.MODULE$ = this;
+      }
+        Code:
+           0: aload_0
+           1: invokespecial #49                 // Method java/lang/Object."<init>":()V
+           4: aload_0
+           5: putstatic     #51                 // Field MODULE$:LDemo$;
+           8: return
+    }
+
+### 抽象类型
+
+    class Food
+    abstract class Animal {
+        def eat(food : Food)
+    }
+
+    c;ass Grass extends Food
+    class Cow extends Animal {
+        override def eat(food : Grass) {}  // 不能编译
+    }
+    // 编译上面代码，出现下面的错误
+    abstract.scala:7: error: class Cow needs to be abstract, since method eat in class Animal of type (food: Food)Unit is not defined
+    (Note that Food does not match Grass: class Grass is a subclass of class Food, but method parameter types must match exactly.)
+    class Cow extends Animal {
+          ^
+    abstract.scala:8: error: method eat overrides nothing.
+    Note: the super classes of class Cow contain the following, non final members named eat:
+    def eat(food: Food): Unit
+          override def eat(food : Grass) {}
+                       ^
+    two errors found
+
+
+    // 如果能通过，则定义下面的代码：
+    class Fish extends Food
+    val bessy : Animal = new Cow
+    bessy eat (new Fish)  // 牛吃鱼，产生错误
+
+    // 修改成如下的：
+    class Food
+    abstract class Animal {
+        type SuitableFood <: Food
+        def eat(food : SuitableFood)
+    }
+    class Grass extends Food
+    class Cow extends Animal {
+        type SuitableFood = Grass
+        override def eat(food : Grass) {}
+    }
+
+
+    class E
+    class F extends E
+    abstract class A {
+            // 编译器会在编译期将X这个type转换为E
+          type X <: E
+          def test(b : X)
+    }
+
+    class B extends A {
+          type X = F
+          override def test(b : F) {}
+          // 或者定义成override def test(b : X) {}
+    }
+
+    生成如下的字节码：
+    public class E {
+        public E() {
+            super();
+        }
+    }
+
+    public class F extends E {
+        public F() {
+            super();
+        }
+    }
+
+    public abstract class A {
+      public abstract void test(E);
+      public A() {
+            super();
+      }
+    }
+
+    public class B extends A {
+      public void test(F) {
+
+      }
+      // 会额外生成一个继承父类的方法，这个方法利用checkCast来转换类型。
+      public void test(E e) {
+            this.test((F)e);
+      }
+
+      public B() {
+            super();
+      }
+    }
+
+### 路径依赖类型
+
+        class DogFood extends Food
+        class Dog extends Animal {
+            type SuitableFood = DogFood
+            override def eat(food : DogFood) {}
+        }
+
+        val bessy = new Cow
+        val lassie = new Dog
+        // 出错
+        lassie eat (new bessy.SuitableFood)  // 这里bessy.SuitableFood == Grass
+        // 正确
+        val bootsie = new Dog
+        lassie eat (new bootsie.SuitableFood)  // 这里bootsie.SuitableFood = DogFood
+
+scala的内部类：
+
+        class Outer {
+            class Inner
+        }
+        // 内部类的表达形式为Outer#Inner.而不是java的Outer.Inner
+        val o1 = new Outer
+        val o2 = new Outer
+o1.Inner和o2.Inner是两个路径依赖类型（并且是不同的类型）两种类型都符合于（即继承于）更一般的类型Outer#Inner（该类型代表任意Outer类型外部对象的Inner类）
+相反，o1.Inner类型是指特定(o1引用的)外部对象的Inner类，类型o2.Inner指的是不同的特定（o2引用的）外部对象的Inner类。
+
+Scala与java一样，内部类实例持有外部类实例的引用，使得内部类可以执行类似于访问其外部类的成员的操作，因此不能在没有通过某种方式指定外部类实例的情况下实例化内部类。
+
+实例化内部类的方式之一是直接在外部类的方法体中完成。这种情况下将使用当前外部类实例（this引用的对象）
+方式之二是使用路径依赖类型，例如，因为类型o1.Inner命名了特定外部对象，所以可以用法如下方式实现实例化：new o1.Inner
+
+### 枚举
+想要创建新的枚举，只需定义扩展scala.Enumeration这个类的对象即可。
+
+    object Color extends Enumeration {
+        val Red = Value
+        val Green = Value
+        val Blue = Value
+    }
+
+    // 可以简化
+    object Color extends Enumeration {
+        val Red, Green, Blue = Value
+    }
+
+    // Color.Read与Direction.Value的值是不一样的，因为两种类型的路径部分不同
+    object Direction extends Enumeration {
+        val North, East, South, West = Value
+    }
+枚举可以用for，map， flatMap,filter等
+
+    object E extends Enumeration {
+          val A, B, C, D, E = Value
+    }
+    生成的java代码如下：
+    public final class E {
+      public static scala.Enumeration$Value E() {
+            return E$.MODULE$.E();
+      }
+      public static scala.Enumeration$Value D() {
+            return E$.MODULE$.D();
+      }
+
+      public static scala.Enumeration$Value C() {
+            return E$.MODULE$.C();
+      }
+      public static scala.Enumeration$Value B() {
+            return E$.MODULE$.B();
+      }
+      public static scala.Enumeration$Value A() {
+            return E$.MODULE$.A();
+      }
+      public static scala.Enumeration$Value withName(java.lang.String name) {
+            return E$.MODULE$.withName(name);
+      }
+      public static scala.Enumeration$Value apply(int index) {
+            return E$.MODULE$.apply(index);
+      }
+      public static int maxId() {
+            return E$.MODULE$.maxId();
+      }
+      public static scala.Enumeration$ValueSet values() {
+            return E$.MODULE$.values();
+      }
+      public static java.lang.String toString() {
+            return E$.MODULE$.toString();
+      }
+    }
+
+    public final class E$ extends scala.Enumeration {
+      public static final E$ MODULE$ = new E$();
+      private final scala.Enumeration$Value A;
+      private final scala.Enumeration$Value B;
+      private final scala.Enumeration$Value C;
+      private final scala.Enumeration$Value D;
+      private final scala.Enumeration$Value E;
+      public scala.Enumeration$Value A() {
+            return this.A;
+      }
+      public scala.Enumeration$Value B() {
+            return this.B;
+      }
+      public scala.Enumeration$Value C() {
+            return this.C;
+      }
+      public scala.Enumeration$Value D() {
+            return this.D;
+      }
+      public scala.Enumeration$Value E() {
+            return this.E;
+      }
+      private E$() {
+            super();
+            this.MODULE$ = this;
+            this.A = this.Value();
+            this.B = this.Value();
+            this.C = this.Value();
+            this.D = this.Value();
+            this.E = this.Value();
+
+      }
+    }
+
+scala不能创建抽象类型的实例，也不能把抽象类型当作其他类的超类型，如定义type A <: B，则不能创建A的实例，也不能将A作为其他类的超类。
+Scala的formatted方法，与java的String.format一致
+
+## 隐式转换和参数
+
+    // 定义String到RandomAccessSeq[Char]的隐式转换
+    implicit def stringWrapper(s : String) =
+        new RandomAccessSeq[Char] {
+            def length = s.length
+            def apply(i : Int) = s.charAt(i)
+        }
+    // 可以显式转换
+    stringWrapper("abc123") exists (_.isDigit)
+    // 也可以隐式转换，编译器会转换成上面的方法调用
+    "abc123" exists (_.isDigit)
+
+    def printWithSpace(seq : RandomAccessSeq[Char]) = seq mkString " "
+    // 可以直接传入String参数
+    printWithSpace("xyz")
+
+### 隐式转换规则
+   * 标记规则：只有标记为implicit的定义才是可用的，可以使用它标记任何变量，函数，或对象定义。
+   * 作用域规则：插入的隐式转换必须以单一标识符的形式处于作用域中，或与转换的源或目标类型关联在一起。
+   scala编译器将仅考虑处于作用域之内的隐式转换，从而，为了使隐式转换可用，必须以某种方式把它带入作用域之内。此外，隐式转换必须以单一标识符的形式进入作用域。
+   编译器不能插入形式为someVariable.convert的转换，例如不能把x + y扩展为someVariable.convert(x) + y。常常使用import Premable
+   ._访问库的隐式转换（Premable是定义隐式转换的对象）
+
+   单一标识符规则有一个例外。编译器还将在源类型或转换的期望目标类型的伴生对象中寻找隐式定义。例如，如果尝试传递Dollar对象给入参为Euro的方法，源类型为Dollar，目标类型为Euro，
+   因此可以把从Dollar到Euro的隐式转换打包到Dollar或Euro类的伴生对象中。
+
+        object Dollar {
+            implicit def dollarToEuro(x : Dollar) : Euro = ...
+        }
+        class Dollar {
+            ...
+        }
+   * 无歧义规则：隐式转换唯有不存在其他可插入转换的前提下才能插入。如果编译器有2个可选方法修正x + y，那么它会报错并拒绝在两者之间做出选择（这里没有选择最佳匹配避免代码出错）
+   * 单一调用规则：只会尝试一个隐式操作。编译器不会把x + y重写成convert1(convert2(x)) + y,编译器不会尝试在某个隐式操作期间再添加隐式转换。
+   * 显式操作先行规则，若编写的代码类型检查无误，则不会尝试任何隐式操作。
+   * 命名隐式转换：隐式转换可以任意命名。
+   * 隐式操作在哪里尝试：转换为期望类型，指定（方法）调用者的转换，隐式参数。
+
+### 隐式转换为期望类型：
+
+    implicit def doubleToInt(x : Double) = x.toInt
+    // 这里会隐式调用val i : Int = doubleToInt(3.5)
+    // 在编译器之外，可以通过一个import语句或通过继承把doubleToInt带入作用域
+    // 通常将较小的类型转换为较大的类型，而不是相反
+    val i : Int = 3.5
+
+### 转换（方法调用的）接收者（方法调用的对象）
+
+    // 与新类型的交互操作
+    class Rational(n : Int, d : Int) {
+        ...
+        def + (that : Rational) : Rational = ...
+        def - (that : Int) : Rational = ...
+    }
+
+    // 将Int作为新类Rational使用
+    implicit def intToRational(x : Int) = new Rational(x, 1)
+    // 由于Int没有方法+(Rational), 则调用隐式转换可以直接在Int上调用+(Rational)
+    val oneHalf = new Rational(1, 2)
+    1 + oneHalf
+
+
+    // 模拟新的语法, ->语法的定义
+    Map(1 -> "one", 2 -> "two", 3 -> "three")
+    package scala
+    object Predef {
+        class ArrowAssoc[A](x : A) {
+            def -> [B](y : B) : Tuple2[A, B] = Tuple2(x, y)
+        }
+        implicit def any2ArrowAssoc[A](x : A) : ArrowAssoc[A] = new ArrowAssoc(x)
+    }
+一旦看到调用的方法不像是存在于接收者类中，就有可能在使用隐式操作。
+
+### 隐式参数
+编译器有时候会用someCall(a)(b)替代someCall(a),或者用new SomeClass(a)(b)替代new SomeClass(a)，从而通过添加缺失的参数列表以满足函数调用。
+
+    class PreferredPrompt(val preference : String)
+    object Greeter {
+        // prompt参数是隐式提供的，也可以显式提供
+        def greet(name : String)(implicit prompt : PreferredPrompt) {
+            println("Welcome: " + name + ". The system is ready.")
+            println(prompt.preference)
+        }
+    }
+
+    val bobePrompt = new PreferredPrompt("relax> ")
+    Greeter.greet("Bob")(bobePrompt)
+
+    // 为了让编译器隐式提供参数，必须首先定义期望类型的变量，
+    object JoesPrefs {
+        // 这里必须定义为implicit,并且它必须以单一标识符处于作用域之内
+        implicit val prompt = new PreferredPrompt("Yes, master> ")
+    }
+    import JoesPrefs._ // 如果没有引入，则不能隐式转换
+    Greeter.greet("Joe")
+
+隐式参数可以带多个参数：
+
+    class PreferredPrompt(val preference : String)
+    class PreferredDrink(val preference : String)
+
+    object Greeter {
+        def greet(name : String)(implicit prompt : PreferredPrompt, drink : PreferredDrink) {
+            println("Welcome, " + name + ". The system is ready.")
+            print("But while you work.")
+            println("Why not enjoy a cup of " + drink.preference + "?")
+            println(prompt.preference)
+        }
+    }
+
+    object JoesPrefs {
+        // 这里定义成var或val都可以
+        // prompt和drink的名称不是固定的，可以随便定义，参数隐式转换是通过类型来匹配的
+        implicit val prompt = new PreferredPrompt("yes, master> ")
+        implicit val drink = new PreferredDrink("tea")
+    }
+
+    import JoesPrefs._
+    Greeter.greet("Joe")
+
+求列表中的最大元素：
+
+    // 隐式参数如果是一个类型的话，则定义隐式参数需要是类型，如果是方法的话，则需要定义def
+    // 这里是一个T => Ordered[T]的方法
+    def maxListImpParm[T](elements : List[T])(implicit orderer : T => Ordered[T]) : T =
+        elements match {
+          case List() => throw new IllegalArgumentException("empty list")
+          case List(x) => x
+          case x :: rest =>
+                // 这里orderer是隐式提供的，所以可以省略
+                val maxRest = maxListImpParm(rest)
+              // val maxRest = maxListImpParm(rest)(orderer)
+              // orderer是隐式提供的，所以可以省略
+              if (x > maxRest) x else maxRest
+              // if (orderer(x) > maxRest) x else maxRest
+        }
+
+    // 编译器会把Int，Double, String等对象隐式插入了orderer函数(T => Ordered[T])。分别转换成RichInt, RichDouble, RichString
+    maxListImpParm(List(1, 5, 10, 13))
+    maxListImpParm(List(1.5, 2, 10.8, 3.1212))
+    maxListImpParm(List("one", "two", "three"))
+
+隐式参数的样式规则：最好对隐式参数的类型使用自定义命名的类型。如果上面的orderer修改成(T, T) => Boolean,则会太普通，容易引起代码混乱
+至少用一个角色确定的名称为隐式参数的类型命名（如Ordered)
+
+### 视界
+
+    //  这里T <% Ordered[T]表示任何的T，只要能被当作Ordered[T]即可，尽管Int不是Ordered[Int]的子类型，但是只要可以通过隐式转换就可以
+    // 如果类型T碰巧已经是Ordered[T]类型，也仍人可以把List[T]传给maxList方法，编译器将调用声明在Predef中的隐式鉴别函数：
+    // implicit def identity[A](x : A) : A = x
+    def maxList[T <% Ordered[T]](elements : List[T]) : T =
+        elements match {
+            case List() => throw new IllegalArgumentException("empty list")
+            case List(x) => x
+            case x :: rest =>
+                val maxRest = maxList(rest)
+                if (x > maxRest) x else maxRest
+        }
+
+### 隐式操作调试：
+   * 显式写出方法，看是否类型匹配
+   * -Xprint:typer选项可以显示编译器正在插入的隐式转换，运行scalac
+
+        package a
+
+        object Implicit extends  Application {
+
+          def maxListImpParm[T](elements : List[T])(implicit orderer : T => Ordered[T]) : T =
+            elements match {
+              case List() => throw new IllegalArgumentException("empty list")
+              case List(x) => x
+              case x :: rest =>
+                  val maxRest = maxListImpParm(rest)(orderer)
+                  if (orderer(x) > maxRest) x else maxRest
+            }
+
+          maxListImpParm(List(1, 5, 10, 13))
+          maxListImpParm(List(1.5, 2, 10.8, 3.1212))
+          maxListImpParm(List("one", "two", "three"))
+        }
+
+        编译：
+        scalac -Xprint:typer a/implicit.scala
+
+        编译器输出内容
+        [[syntax trees at end of                     typer]] // implicit.scala
+        package a {
+          object Implicit extends AnyRef with Application {
+            def <init>(): a.Implicit.type = {
+              Implicit.super.<init>();
+              ()
+            };
+            def maxListImpParm[T >: Nothing <: Any](elements: List[T])(implicit orderer: T => Ordered[T]): T = elements match {
+              case immutable.this.List.unapplySeq[T](<unapply-selector>) <unapply> () => throw new scala.`package`.IllegalArgumentException("empty list")
+              case immutable.this.List.unapplySeq[T](<unapply-selector>) <unapply> ((x @ _)) => x
+              case (hd: T, tl: List[T])scala.collection.immutable.::[?T1]((x @ _), (rest @ _)) => {
+                val maxRest: T = Implicit.this.maxListImpParm[T](rest)(orderer);
+                if (orderer.apply(x).>(maxRest))
+                  x
+                else
+                  maxRest
+              }
+            };
+            Implicit.this.maxListImpParm[Int](immutable.this.List.apply[Int](1, 5, 10, 13))({
+              ((x: Int) => scala.this.Predef.intWrapper(x))
+            });
+            Implicit.this.maxListImpParm[Double](immutable.this.List.apply[Double](1.5, 2.0, 10.8, 3.1212))({
+              ((x: Double) => scala.this.Predef.doubleWrapper(x))
+            });
+            Implicit.this.maxListImpParm[String](immutable.this.List.apply[String]("one", "two", "three"))({
+              ((x: String) => scala.this.Predef.augmentString(x))
+            })
+          }
+        }
+
+        warning: there were 1 deprecation warning(s); re-run with -deprecation for details
+        one warning found
+
+## 实现列表
+
+
+
+
+
+
+
+
+
+
+
+
+
+
