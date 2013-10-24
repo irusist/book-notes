@@ -4080,14 +4080,169 @@ Scala的formatted方法，与java的String.format一致
         one warning found
 
 ## 实现列表
+List的层级：
+scala.List[+T]<sealed abstract>
+scala.::[T]<final case>
+scala.Nil<case object>
+x :: xs 被当作样本类::的构造器调用：::(x, xs)
+
+    abstract class Fruit
+    class Apple extends Fruit
+    class Orange extends Fruit
+    val apples = new Apple :: Nil   // apples : List[Apple] = List(Apple@478212)
+    val fruits = new Orange :: apples  // fruits : List[Fruit] = List(Orange@123123, Apple@478212)
+    // 因为::方法的定义为def ::[B >: A] (x: B): List[B] = new scala.collection.immutable.::(x, this)
+
+scala.collection.mutable.ListBuffer  +=和toList是常量时间操作
+private[scala] var tl: List[B]表示tl只能在scala包中的类访问，包括scala包的子包。如scala.collection.mutable.ListBuffer，ListBuffer类访问了tl元素
+
+ListBuffer的一些字段和方法：
+start : List[A]         指向存储于缓冲的所有元素的列表
+last0 : ::[A]           指向列表中的最后一个::单元
+exported : Boolean      说明缓冲是否曾经通过使用toList操作转换为列表
+toList
++=                      只有在列表缓冲被转换为列表之后（调用toList之后）还要扩展（调用+=）的情况下才需要复制元素
+
+## 重访for表达式
+所有的yield产生结果的for表达式都会被编译器转译为高阶方法map，flatMap及filter的组合使用,所有不带yield的for循环都会被转译为仅对高阶函数filter和foreach的调用
+
+    //  由生成器，一个定义，一个过滤器组成
+    for (p <- persons; n = p.name; if (n startsWith "To")) yield n
+    for {
+        p <- persons // 生成器
+        n = p.name // 定义
+        if (n startsWith "To") // 过滤器
+    } yield n
+
+### 皇后问题
+### 使用for表达式做查询
+for等同于数据库查询语言的常用操作
+### for表达式的转译：
+   * 转译一个生成器的for表达式
+
+        for (x <- expr1) yield expr2
+        // 转译为
+        expr1 .map(x => expr2)
+   * 转译以生成器和过滤器开始的for表达式
+
+        for (x <- expr1; if expr2) yield expr3
+        // 转译为
+        for (x <- expr1 filter (x =>expr2)) yield expr3
+        // 最终转译为
+        expr1 filter (x => expr2) map (x => expr3)
+
+        // 如果在过滤之后有更多的元素，同样的转译方案将再次应用。如果seq是任意序列的生成器，定义及过滤器：
+        for (x <- expr1; if expr2; seq) yield expr3
+        // 转译为
+        for (x <- expr1 filter expr2; seq) yield expr3
+   * 转译以两个生成器开始的for表达式
+
+        // seq是任意序列的生成器，定义及过滤器，实际上，seq可能是空的，这种情况下，expr2后面就没有分号了
+        for (x <- expr1; y <- expr2; seq) yield expr3
+        // 转译为
+        expr1 .flatMap (x => for (y <- expr2; seq) yield expr3)
 
 
+        for (b1 <- books; b2 <- books if b1 != b2;
+            a1 <- b1.authors; a2 <- b2.authors if a1 == a2) yield a1
+        如何而转译？
+   * pattern转译
+
+        for ((x1, ... xn) <- expr1) yield expr2
+        // 转译为
+        expr1.map (case (x1, ... xn) => expr2)
+
+        for (pat <- expr1) yield expr2
+        // 转译为
+        expr1 filter (
+            case pat => true
+            case _ => false
+        ) map {
+            case pat => expr2
+        }
+   * 转译定义
+
+        for (x <- expr1; y = expr2; seq) yield expr3
+        // 转译为
+        for ((x, y) <- for (x <- expr1) yield (x, expr2)); seq) yield expr3
+### 转译for循环
+
+    for (x <- expr1) body
+    // 被转译为
+    expr1 foreach (x => body)
+
+    for (x <- expr1; if expr2; y <- expr3) body
+    // 被转译为
+    expr1 filter (x => expr2) foreach (x => expr3 foreach (y => body))
+
+### 反其道而行之
+
+    object Demo {
+        def map[A, B](xs : List[A], f : A => B) : List[B] =
+            for (x <- xs) yield f(x)
+        def flatMap[A, B] (xs : List[A], f : A => List[B]) : List[B] =
+            for (x <- xs; y <- f(x)) yield y
+        def filter[A](xs : List[A], p : A => Boolean) : List[A] =
+            for (x <- xs; if p(x)) yield x
+    }
+
+### 泛化的for
+for表达式能用在列表和数组上，是因为列表和数组都定义了map, flatMap和filter操作，又因为列表和数组定义了foreach方法，所以对这些数据类型的for循环也可以
+除了列表和数组，还有其他类型支持这四种方法从而可以使用for表达式：
+Range
+Iterator
+Stream
+Set
+
+要支持for表达式和for循环，需要定义map,flatMap,filter,foreach四个方法，也可以只定义这些方法的子集，从而部分支持for表达式或循环
+  * 如果类型只定义了map，可以允许单一生成器组成的for表达式
+  * 如果定义了flatMap和map，可以允许若干生成器组成的for表达式
+  * 如果定义了foreach，允许for循环（可以有单一或若干生成器）
+  * 如果定义了filter，for表达式中允许以if开头的过滤表达式
 
 
+for表达式的转译发生在类型检查之前，只须for表达式展开的结果通过类型检查即可，scala没有定义for表达式自身的类型指定规则。
+
+    abstract class C[A] {
+        def map[B](f : A => B) : C[B]
+        def flatMap[B] (f : A => C[B]) : C[B]
+        def filter(p : A => Boolean) : C[A]
+        def foreach(b : A => Unit) : Unit
+    }
 
 
+## 抽取器(Extractors)
+scala里的抽取器是具有名为unapply成员方法的对象，通常抽取器对象还会定义可以构建值的对偶方法apply，但并非必须。
 
+    object EMail {
+        // 注入方法（可选的）
+        def apply(user : String, domain : String) = user + "@" + domain
+        // 抽取方法（规定的)
+        def unapply(str : String) : Option[(String, String)] = {
+            val parts = str split "@"
+            // 当把元组作为唯一的参数传递给函数的时候，Some对于元组(user, domain)的应用可以省略一对括号，所以Some(user, domain)与Some((user, domain))同义
+            if (parts.length == 2) Some(parts(0), parts(1)) else None
+        }
+    }
 
+一旦模式匹配碰到的是抽取器对象所指的模式，它就会在选择器表达式中调用抽取器的unapply方法
+
+    // 这里case遇到EMail是一个抽取器，所以会对selectorString调用unapply方法
+    // 对EMail.unapply调用返回的或是None，或是Some(u, d)，对于Some类型值来说，u是地址的用户部分，d是域部分，如果是None，说明模式不能匹配，然后
+    // 系统尝试其他的模式或失败返回MatcherError异常
+    selectorString match {case EMail(user, domain) => ...}
+
+    // 模式匹配器会首先检查给定值x是否符合EMail的unapply方法的参数类型String，如果符合，则x值会转型为String，模式匹配按照之前那样进行，如果不符合，模式立刻失败
+    val x : Any = x match {case EMail(user, domain) => ...}
+
+可以不定义注入方法，只定义抽取方法，对象本身被称为抽取器，与是否具有apply方法无关
+如果包含了注入方法，那么就应该与抽取方法呈对偶关系：
+
+    EMail.unapply(EMail.apply(user, domain))
+    应该返回
+    Some(user, domain)
+
+### 0或1个变量的模式
 
 
 
