@@ -4245,7 +4245,1354 @@ scala里的抽取器是具有名为unapply成员方法的对象，通常抽取�
 ### 0或1个变量的模式
 
 
+## 使用XML
+scala允许在任何可以存在表达式的地方以字面量的形式键入XML，编译过程会进入XML输入模式并把内容读取为XML，直到发现匹配了前面开始标签的结束标签为止。
+
+    // res0 : scala.xml.Ele = ...
+    <a>
+        This is some XML.
+        Here is a tage; <atag/>
+    </a>
+
+scala.xml.Ele
+scala.xml.Node：所有XML节点类的抽象超类
+scala.xml.Text：只包含文本的节点，例如<a>stuff</a>的stuff部分是Text类的
+scala.NodeSeq：保存节点序列，可以把单个的Node看作是仅有一个元素的NodeSeq
+
+可以在XML字面量中使用花括号{}做转义符，执行Scala代码
+
+    <a> {"Hello" + ", World!"} </a>
+
+转义字符可以包括任意的scala内容，乃至更多的XML字面量。因此，随着内嵌级别的增加，代码可以在XML与普通Scala代码之间来回切换。
+
+    val yearMade = 1955
+    <a> { if (yearMade < 2000) <old>{yearMade}</old> else xml.NodeSeq.Empty }</a>
+    // res2 : scala.xml.Elem = <a> <old>1955<old> </a>
+
+转义括号内的表达式并非一定要运行处XML节点才行。它可以返回任何scala值，这种情况下，结果将被转变为字符串，然后以文本节点的形式插入：
+
+    <a> { 3 + 3} </a>
+    // res3 : scala.xml.Elem = <a> 6 </a>
+
+如果以打印的方式输出返回节点，那么文本中所有的<, >以及&字符将被转义
+
+    <a> {"</a>potential security hole<a>"} </a>
+    // res4 : scala.xml.Elem = <a> &lt;/a&gt;potential security hole&lt;a&gt; </a>
+
+如果用低级字符串操作创建XML,要始终使用XML字面量，而不是字符串添加的方式创建XML
+
+    "<a>" + "</a>potential security hole<a>" + "</a>"
+    res5 : String = <a></a>potential security hole<a></a>
+
+### 序列化
+要把一个类实例转换为XML，只要添加使用了XML字面量和转义括号的toXML方法
+
+    abstract class CCTherm {
+        val description : String
+        val yearMade : Int
+        val dateObtained : String
+        val bookPrice : Int
+        val purchasePrice : Int
+        val condition : Int
+
+        def toXML =
+            <cctherm>
+                <decription>{description}</decription>
+                <yearMade>{yearMade}</yearMade>
+                <dateObatined>{dataObtained}</dataObtained>
+                <bookPrice>{bookPrice}</bookPrice>
+                <purchasePrice>{purchasePrice}</purchasePrice>
+                <condition>{condition}</condition>
+            </cctherm>
+    }
+
+    val therm = new CCTherm {
+        val description  = "hot dog #5"
+        val yearMade  = 1952
+        val dateObtained = "March 14, 2006"
+        val bookPrice = 2199
+        val purchasePrice = 500
+        val condition = 9
+    }
+    therm.toXML
+    // res6 : scala.xml.Elem =
+       <cctherm>
+           <decription>hot dog #5</decription>
+           <yearMade>1952</yearMade>
+           <dateObatined>March 14, 2006</dataObtained>
+           <bookPrice>2199</bookPrice>
+           <purchasePrice>500</purchasePrice>
+           <condition>9</condition>
+       </cctherm>
+
+如果向要在XML文本中包含花括号，而不是用于scala代码的转义，只要在一行中写两次花括号即可
+
+    <a> {{{{brace yourself!}}}} </a>
+    // res7 : scala.xml.Elem = <a> {{brace yourself!}} </a>
+
+### 拆解XML
+
+   * 抽取文本：通过对XML节点调用text方法可以取回节点内去除了所有元素标签之后的全部文本
+
+        <a>Sounds <tag/> good</a>.text
+        // res8 : String = Sounds good
+        // 所有的编码字符会自动解码
+        <a> input  ----&gt; output </a>.text
+        // res9 : String = input ----> output
+   * 抽取子元素，如果想要通过标签名找到子元素，只要调用 \ 加标签名即可
+
+        <a><b><c>hello</c></b></a> \ "b"
+        // res10 : scala.xml.NodeSeq = <b><c>hello</c></b>
+        // 可以用 \\ 替代 \ , 执行深度搜索寻找子元素等内容，\和\\代替XPath的/和//，因为//是scala的注释的开始
+        <a><b><c>hello</c></b></a> \ "c"
+        // res11 : scala.xml.NodeSeq =
+        <a><b><c>hello</c></b></a> \\ "c"
+        // res12 : scala.xml.NodeSeq = <c>hello</c>
+        <a><b><c>hello</c></b></a> \ "a"
+        // res13 : scala.xml.NodeSeq =
+        <a><b><c>hello</c></b></a> \\ "a"
+        // res14 : scala.xml.NodeSeq = <a><b><c>hello</c></b></a>
+
+   * 抽取属性：可以使用\和\\方法抽取标签属性，只要在属性名之前加上 @ 即可
+
+        val joe = <employee
+            name="Joe"
+            rank="Code monkey"
+            serial="123"/>
+        // joe : scala.xml.Elem = <employee rank="code monkey" name="Joe" serial="123"></employee>
+        joe \ "@name"
+        // res15 : scala.xml.NodeSeq = Joe
+        joe \ "@serial"
+        // res16 : scala.xml.NodeSeq = 123
+### 反序列化
+
+    def fromXML(node : scala.xml.Node) : CCTherm =
+        new CCTherm {
+            val description = (node \ "description").text
+            val yearMade = (node \ "yearMade").text.toInt
+            val dateObtained = (node \ "dataObtained").text
+            val bookPrice = (node \ "bookPrice").text.toInt
+            val purchasePrice = (node \ "purchasePrice").text.toInt
+            val condition = (node \ "condition").text.toInt
+        }
+### 加载和保存
+要把XML转换为字符串，可以直接调用toString方法
+要把XML转换为字节文件，可以使用XML.saveFull命名。需要选择的部分包括：文件名，要保存的节点及字符编码。第四个参数是决定是否在文件头写上包含字符编码的XML声明
+第五个参数是这个XML的文档类型，可以指定null，任由文档类型为未指定
+
+    scala.xml.XML.saveFull("therm1.xml", node, "UTF-8", true, null)
+
+因为文件包含了所有加载器需要知道的东西，只要调用XML.loadFile和文件名即可。
+
+    val loadnode = xml.XML.loadFile("therm1.xml")
+    // loadnode : scala.xml.Elem = ...
+
+
+### XML的模式匹配
+XML模式看上去很像XML字面量，主要差别在于如果插入转义符号{}，那么{}内的代码不是表达式而是模式，{}内嵌的模式可以使用所有的scala模式语言，包括绑定新变量，
+执行类型检查，以及使用_和_*忽略内容
+
+    def proc(node : scala.xml.Node) : String =
+        node match {
+            case <a>{contents}</a> => "It's an a: " + contents
+            case <b>{contents}</b> => "It's an b: " + contents
+            case _ => "It's something else."
+        }
+如果想要函数能够匹配proc(<a>a <em>red</em> apple</a>)或proc(<a/>)，可以执行对节点序列而不是单个节点的匹配。任意序列XML节点的模式写做 _*。
+
+    def proc(node : scala.xml.Node) : String =
+        node match {
+            case <a>{contents @ _*}</a> => "It's an a: " + contents
+            case <b>{contents @ _*}</b> => "It's a b: " + contents
+            case _ => "It's something else."
+        }
+    proc(<a>a <em>red</em> apple</a>)
+    // res21 : String = It's an a: ArrayBuffer(a, <em>red</red>, apple)
+    proc(<a/>)
+    // res22 : String = It's an a: Array()
+
+XML模式可以与for表达式一起工作
+
+    val catalog = ...
+    // 以下会打印空白
+    catalog match {
+        case <catalog>{therms @ _*}</catalog> =>
+            // 这里在每个节点中间还有空白节点，必须要注意
+            for (therm <- therms)
+                println("processing: " + (therm \ "description").text)
+    }
+
+    // 以下不会打印空白
+    catalog match {
+        case <catalog>{therms @ _*}</catalog> =>
+            for (therm @ <cctherm>(_*)</cctherm> <- therms)
+                println("processing: " + (therm \ "description").text)
+    }
+
+
+## 使用对象的模块化编程
+
+    class Food(val name : String) {
+          override def toString = name
+    }
+    生成java代码如下：
+    public class Food {
+      private final java.lang.String name;
+
+      public java.lang.String name() {
+            return this.name;
+      }
+      public java.lang.String toString() {
+            return this.name();
+      }
+      public Food(java.lang.String name) {
+            this.name = name;
+            super();
+      }
+    }
+
+    abstract class Food(val name : String) {
+       override def toString = name
+    }
+    生成java代码如下：
+     public abstract class Food {
+       private final java.lang.String name;
+
+       public java.lang.String name() {
+             return this.name;
+       }
+       public java.lang.String toString() {
+             return this.name();
+       }
+       public Food(java.lang.String name) {
+             this.name = name;
+             super();
+       }
+     }
+
+     object Apple extends Food("Apple")
+     生成的java代码如下
+     public final class Apple {
+       public static java.lang.String toString() {
+            return Apple$.MODULE$.toString();
+       }
+       public static java.lang.String name() {
+            return Apple$.MODULE$.name();
+       }
+     }
+
+     public final class Apple$ extends Food {
+       public static final Apple$ MODULE$ = new Apple$();
+       private Apple$() {
+            super("Apple")
+            this.MODULE$ = this;
+       }
+     }
+
+单例对象可以作为一个模块
+可以把模板模式的模板代码放在抽象类中，再把模板模式中的不同代码的方法放在object中实现，object继承这个抽象类。
+模块常常过于庞大，而不适于放在单个文件中，如果发生这种情况，可以使用特质把模块拆分成多个文件，可以把一个单独的模块放在一个特质当中。然后混入这个特质。
+
+自身类型（self type）；自身类型是在类中提到this时，对于this的假设性类型。自身类型指定了对于特质能够混入的具体类的需求。如果特质仅用于混入另一个或几个特质，
+那么可以指定那些假设性的特质。
+
+    trait SimpleFoods {
+        object Pear extends Food("Pear")
+        def allFoods = List(Apple, Pear)
+        def allCategories = Nil
+    }
+
+    trait SimpleRecipes {
+        this : SimpleFoods =>
+
+        object FruitSalad extends Recipe {
+            "fruit salad",
+            // 任何混入了SimpleRecipes的具体类都必须同时是SimpleFoods的子类型，则相当于Pear是子类的一个成员。
+            List(Apple, Pear),      // 默认情况下，Apple在当前包下，但是Pear在SimpleFoods中，通过自身类型可以访问到，这里的Pear的引用隐含地被认为是this.Pear
+            "Mix it all together."
+        }
+
+        def allRecipes = List(FruitSalad)
+    }
+
+
+在不同包里实例化同一个类，生成的对象不是同一个对象，会带上它的包，类路径。是如何实现的？？？？
+
+   abstract class A {
+        case class Case(name : String)
+   }
+
+   class B extends A {
+        val b = Case("B")
+   }
+
+   class C extends A {
+        val c = Case("C")
+   }
+结尾.type表示它是一个单例类型。单例类型及其特殊，只保存一个对象。如val database : db.type = db
+
+
+## 对象相等性
+
+重写equals方法时有四个常见陷阱可能会造成不一致：
+
+   1. 定义equals方法时采用了错误的方法签名：  def equals(other : Any) : Boolean （用equals不是用==，用Any不是用具体的类）
+   2. 修改了equals方法但没有同时修改hashCode
+   3. 用可变字段定义equals方法
+   4. 未能按等同关系定义equals方法
+根据Scala.Any中的equals的方法的契约规定，equals方法必须对非null对象实现等同关系。
+   * 它必须是自反射的，对任何非空值x，表达式x.equals(x)应该返回true
+   * 它是对称的，对任何非空值x和y，x.equals(y)当且仅当y.equals(x)返回true时返回true，常用作子类和父类的比较，如果子类有更多的字段，这样父类与子类就不是对称的。
+   * 它是可传递的，对任何非空值x，y和z，如果x.equals(y)返回true，且y.equals(z)返回true，则x.equals(z)应返回true
+   * 它是一致性的，对任何非空值x和y，多次调用x.equals(y)都应一致的返回true或一致的返回false，只要用于对象的equals比较的信息没有被修改过
+
+一旦类重定义了equals（以及hashCode)，它应该同时明确指出该类的对象不与任何定义了不同相等性方法的超类的对象相等。
+通过给每个重定义equals方法的类添加一个canEqual方法来实现: def canEqual(other : Any) : Boolean
+如果other对象是重定义了canEqual方法的类的实例，则该方法应该返回true，否则应返回false。equals方法中调用canEqual来确保对象可以双向进行比较。
+
+    class Point(val x : Int, val y : Int) {
+        override def hashCode = 41 * (41 + x) + y
+        override def equals(other : Any) = other match {
+            case that : Point =>
+                (that canEqual this) && (this.x == that.x) && (this.y == that.y)
+            case _ => false
+        }
+
+        def canEqual(other : Any) = other.isInstanceOf[Point]
+    }
+
+    class ColoredPoint(x : Int, y : Int, val color : Color.Value) extends Point(x, y) {
+        override def hashCode = 41 * super.hashCode + color.hashCode
+        override def equals(other : Any) = other match {
+            case that : ColoredPoint =>
+                (that canEqual this) && (super.equals(that) && this.color == that.color
+            case _ => false
+        }
+
+        override def canEqual(other : Any) =
+            other.isInstanceOf[ColoredPoint]
+    }
+
+canEqual的方式违反了LSP原则，因为它不能在超类的地方用子类代替。
+
+### 定义带参数类型的相等性
+参数化类型的元素类型在编译器的擦除阶段被抹掉，这些信息在运行期无法被检查
+在模式匹配中，要匹配一个类参数，可以使用小写的字母（小写表示变量）或 _(匹配任意值)
+
+    // 模式匹配
+    case that : Branch[_]
+    // 存在类型简写
+    other.asInstanceOf[Branch[_]]
+
+### equals和hashCode的制作方法
+  1. 如果在非final类中重写equals方法，应该创建canEqual方法，如果equals的定义是继承自AnyRef（即equals没有在类继承关系的上方被重新定义），则
+canEqual的定义将会是新的，否则它将重写之前同名方法的定义。def canEqual(other : Any) : Boolean =
+  2. 如果参数对象是当前类的实例，则canEqual方法应该返回true（即canEqual定义所在的类），否则应返回false
+
+        other.isInstance[Rational]
+  3. 在equals方法中，记得声明传入的对象类型为Any
+
+        override def equals(other : Any) : Boolean =
+  4. 将equals的方法体写为单个match表达式，而match的选择器应为传递给equals的对象:
+
+        other match {
+            case that : Ration =>
+        }
+  5. match表达式应有2个case，第一个声明为定义equals方法的类的类型模式：case that : Rational =>
+  6. 在这个case的语句中，编写一个表达式，把两个对象要相等必须为true的独立表达式以逻辑与的方式结合起来。如果重写的equals方法并非是AnyRef的那一个，则要包含对
+  超类equals方法的调用 ：
+
+        super.equals(that) &&
+  如果为首个引入canEqual的类定义equals方法，应该调用其参数的canEqual方法，将this作为参数传递进去
+
+        (that canEqual this) &&
+  重写的equals方法也应该包含canEqual的调用，除非它们包含了对super.equals的调用。在后面这个情形中，canEqual测试已经会在超类调用中完成。最后，对每个与相等
+  性相关的字段，验证本对象的字段与传入对象的字段是相等的。
+
+        number == that.number && denom == that.denom
+  7. 对第二个case，用一个通配的模式返回false
+
+        case _ => false
+
+hashCode方法的要求：将对象中用在equals方法里计算相等性的每个字段（是为相关字段）都包含进来。对每个相关字段，不管类型是什么，都可以调用hashCode来计算出一个哈希码。
+为计算整个对象的哈希码，对第一个字段的哈希码加上41，再乘以41，再加上第二个字段的哈希码，再乘以41，再加上第三个字段的哈希码，再乘以41，如此继续下去。
+
+        // 5个名为a, b, c, d, e的相关字段的对象哈希码
+        override def hasCode : Int =
+            41 * (
+                41 * (
+                    41 * (
+                        41 * (
+                            41 * a.hashCode
+                        ) + b.hashCode
+                    ) + c.hashCode
+                ) + d.hashCode
+            ) + e.hashCode
+
+也可以不对Int，Short，Byte和Char字段调用hashCode，Int的哈希码是Int的值，Short，Byte和Char的哈希码也会自动变宽为Int
+之所以选择41作为乘数是因为它是个奇质数，可以用别的数字，不过仍应该是奇质数，以防最小化溢出时潜在的信息丢失。给最里层的值加上41是为了减少第一个乘法得到0的可能性，
+这是假定第一个字段更有可能是0而非-41，选择41只是为了好看，也可以用任何非0的整数。
+
+如果equals方法将super.equals(that)调用作为其计算的一部分，应该以调用super.hashCode开始hashCode计算。
+
+    override def hashCode : Int =
+         41 * (
+            41 * (
+                super.hashCode
+            ) + number
+         ) + denom
+
+对于Array，它们在计算哈希码时并不会考虑元素，因此，对数组而言，应该将每个元素当做是对象的字段，主动调用对每个元素的hashCode，或者将数组传递给单例对象
+java.util.Arrays的某一个hashCode方法，如果字段是List,Set,Map或元组，这些类的equals和hashCode方法被重写过，会考虑包含的元素。
+
+如果发现一个特定的哈希码计算影响到程序的性能，可以考虑将哈希码缓存起来。如果对象是不可变的，可以在对象创建时计算哈希码并保存到一个字段中，可以简单的通过用
+val而不是用def重写hashCode来做到
+
+    override val hashCode : Int =
+        41 * (
+            41 * number
+        ) + denom
+
+java.util.HashMap好像有缓存hashCode？判断耗用时间比较多的程序是否都可以用缓存？？？
+
+可以将可比较的对象的类定义为样本类，这样，scala编译器会自动地添加正确的符合各项要求的equals和hashCode方法。
+
+## 结合Scala和Java
+
+### 在java中使用scala
+scala的类，方法，字符串，异常等都和它们在java中的对应概念一样编译成相同的java字节码
+
+   * 值类型：类似Int这样的值类型翻译成java有两种不同的方式，只要可能，编译器会将Scala的Int翻译为java的int以获得更好的性能，
+   如果编译器不确定某个对象是不是值类型，而是会使用对象并依赖相应的包装类，如java.lang.Integer这样的包装类允许一个值类型被包装在java对象中。
+   * 单例对象：Scala对单例对象的翻译采用了静态和实例方法相结合的方式。对每一个Scala单例对象，编译器都会为这个对象创建一个名称后面加美元符号的java类。
+   这个类拥有Scala单例对象的所有方法和字段，这个Java类同时还有一个名为MODULE$的静态字段，保存该类在运行期创建的一个实例.
+
+           object App {
+                def main(args : Array[String]) {
+                    println("Hello, World!")
+                }
+           }
+           // scala会生成一个java类App$
+           public final class App$ extends java.lang.Object implements scala.ScalaObject {
+                public static final App$ MODULE$;
+                public static {};
+                public App$();
+                public void main(java.lang.String[]);
+                public int $tag();
+           }
+
+           // 如果没有一个名为App的类，Scala就会生成一些静态方法转发到App$的方法
+           // 如果有一个名为App的类，Scala会创建一个相应的App类保存定义的App类的成员，它就不会添加任何转发到同名单例对象的方法，Java代码必须通过MODULE$字段来访问这个单例。
+           public final class App extends java.lang.Object {
+                public static final int $tag();
+                public static final void main(java.lang.String[]);
+           }
+   * 作为接口的特质：编译任何特质都会创建一个同名的java接口，这个接口可以作为java类型使用，可以通过这个类型变量来调用scala对象的方法。可以用scala语法来编写java接口
+
+### 注解
+有一些注解编译器在针对java平台编译时会产生额外的信息，当编译器看到这样的注解时，会首先根据一般的scala原则去处理，然后针对java做一些额外的工作
+
+   * 过期：对任何标记为@deprecated的方法或类，编译器会为产出的代码添加java自己的过期注解。因此，java编译器能够在java代码访问过期scala方法时给出过期警告。
+   * volatile字段：scala中标记为@volatile的字段会在产出的代码中添加java的volatile修饰符。因此，scala中的volatile字段与java的处理机制完全一致。而对volatile字段
+   的访问也是完全根据java内存模型所规定的volatile字段处理原则来进行排列的。
+   * 序列化：scala的三个标准序列化注解全部都翻译成java中对等的语法结构。@serializable类会被加上java的Serializable接口。@SerialVersionUID(1234L)
+   会被转换成如下Java字段定义：
+
+        private final static long SerialVersionUID = 1234L;
+   任何标记为@transient的变量会加上Java的transient修饰符。
+
+        看有人把volatile写成了transient，却不能测试出来，volatile如何才能测试出来呢？？？？
+
+Scala并不检查抛出的异常是否被代码捕获，就是说，scala的方法并没有与java中的throws声明向对应的定义。所以scala方法都被翻译成没有申明抛出异常的java方法。
+java字节码的验证器不会检查这些声明，java编译器会检查，但验证器不会。
+
+scala这样做是因为在java中，经常会有捕获了异常但是抛出异常的处理，仅仅是为了编译通过
+在与java的对接中，可能会需要编写描述方法可能会抛出哪些异常的对java友好的注解。
+
+    import java.io._
+    class Reader(fname : String) {
+        private val in = new BufferedReader(new FileReader(fname))
+
+        @throw(classOf[IOException]
+        def read() = in.read()
+    }
+    // 翻译成java代码如下：
+    public class Reader extends java.lang.Object implements scala.ScalaObject {
+        public Reader(java.lang.String);
+        public int read() throws java.io.IOException;
+        public int $tag();
+    }
+
+### java注解
+java框架中的注解可以直接在scala代码中使用。任何java框架都会看到编写的注解，就好像是用java编写的一样。
+
+    import org.junit.Test
+    import org.junit.Assert.assertEquals
+
+    class SetTest {
+
+        @Test
+        def testMultiAdd {
+            val set = Set() + 1 + 2 + 3 + 1 + 2 + 3
+            assertEquals(3, set.size)
+        }
+    }
+
+    // scala -cp junit-4.3.1.jar:. org.junit.runner.JUnitCoreSetTest
+
+
+### 编写自己的注解
+为了让注解对java反射可见，必须用java的语法编写并用javac编译。
+
+    import java.lang.annotation.*;
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.METHOD)
+    public @interface Ignore {}
+
+    // 使用注解
+    object Tests {
+        @Ignore
+        def testData = List(0, 1, -1, 5, -5)
+    }
+
+在使用java注解时，必须遵循它们所规定的限制，如：在注解参数中，只能使用常量，而不能使用表达式
+
+### 存在类型
+存在类型的通用形式如下：
+
+        type forSome {declarations}
+type部分是任意的scala类型，而declarations部分是一个抽象val和type的列表。这个定义解读为：声明的变量和类型是存在但未知的，正如类中的抽象成员那样。
+这个类型进而被允许引用这些声明的变量和类型，虽然编译器并不知道它们具体指向什么。
+
+    // java中的Iterator<?>写为
+    Iterator[T] forSome {type T}
+    // 这是一个T的Iterator，而T是某种类型T，具体T是什么未知，可以是任何类型，不过对这个特定的Iterator而言，它是固定不变的。
+
+    // JAVA中的Iterator<? extends Component>写为
+    Iterator[T] forSome {type T <: Component}
+
+    // Iterator[_] 的含义与Iterator[T] forSome {type T}相同
+
+
+如果在可以使用类型的地方使用下划线，则scala会做出一个存在类型。每个下划线在forSome语句中变成一个类型参数，
+因而，如果在同一个类型中使用两个下划线，则得到与在forSome语句中使用两个类型相同的效果。
+
+还可以在使用占位符语法是插入上界和下界，只需要简单地给下划线加上它们，而不必在forSome语句中这样做。
+
+    // Iterator[_ <: Component] 与 Iterator[T] forSome {type T <: Component}一样
+
+主要用在scala与java中的通配符交互中。在scala中一般不使用存在类型，而使用抽象类型的type Elem，然后由具体的子类去定义这个Type Elem = T
+
+## Actor和并发
+actor是一个类似线程的实体，它有一个用来接收消息的邮箱。实现actor的方法是继承scala.actors.Actor并完成其act方法.
+
+    import scala.actors._
+
+    object SillyActor extends Actor {
+        def act() {
+            for (i <- 1 to 5) {
+                println("I'm acting!")
+                Thread.sleep(1000)
+            }
+        }
+    }
+
+    // 通过调用actor的start方法来启动它，这个启动java线程类似：
+    SillyActor.start()
+    // SillyActor这个actor的运行独立于运行命令行的线程，actor在运行时也是相互独立的。
+
+    // 可以用对象scala.actor.Actor中名为actor工具的方法创建actor：
+    // 这个actor在定义以后立即启动，无须另外调用start方法
+    import scala.actors.Actor._
+    val seriousActors = actor {
+        for (i <- 1 to 5) {
+            println("That is the question.")
+            Thread.sleep(1000)
+        }
+    }
+
+Actor通过相互发送消息的方式来通信，可以使用 ! 方法来发送消息：SillyActor ! "hi there"
+
+    val echoActor = actor {
+        while (true) {
+            // 与match语法类似
+            receive {
+                case msg => println("received message: " + msg)
+            }
+        }
+    }
+
+当actor发送消息时，它不会阻塞，而当actor接收到消息时，它也不会被打断。发送的消息在接收actor的邮箱中等待处理，直到actor调用receive方法。
+
+    echoActor ! "hi there";   echoActor ! 15
+
+偏函数(PartialFunction特质的实例）并不是完整的函数，也就是说，它并不对所有的输入值都有定义。除了接受单个参数的apply方法之外，偏函数还提供一个isDefinedAt方法，
+同样只接受单个参数，如果偏函数能够处理传给isDefinedAt的值，则这个方法返回true。这个的值传递给apply是安全的，如果传递给apply的值会让isDefinedAt方法返回false，apply则会抛出一个异常。
+
+actor只会处理传给receive方法的偏函数中的某个样本相匹配的消息。对邮箱中的每个消息，receive都会先调用传入的偏函数isDefinedAt方法来决定它是否与某个样本匹配，然后处理该消息。
+receive方法将选定邮箱中第一个让isDefinedAt返回true的消息，将这个消息传递给偏函数的apply方法。而偏函数的apply方法将会处理这个消息。
+如果邮箱中没有让isDefinedAt返回true的消息，则被调用receive的actor将会阻塞。直到收到匹配的消息。
+
+    val intActor = actor {
+        receive {
+            case x : Int => println("Got an Int: " + x)
+        }
+    }
+
+    // intActor ! "Hello"
+    // intActor ! Math.Pi
+    // intActor ! 12
+
+### 把原生线程当做actor
+Actor子系统会管理一个或多个原生线程供自己使用，只要用的是显式定义的actor，就不需要关心它们和线程的对应关系是怎样的。
+该子系统也支持：每个原生线程也可以被当做actor来使用，不过不能直接使用Thread.current。因为它并不具备必要的方法。应该使用Actor.self来将当前线程作为actor来查看。
+
+    import scala.actors.Actor._
+    self ! "hello"
+    self.receive {case x => x}
+
+receiveWithin方法：这个方法可以指定一个以毫秒计的超时时限。如果在解释器命令行中使用receive的话，receive将会阻塞命令行，直到有消息到来，对self.receive而言，这可能永远等下去。
+
+    self.receiveWithin(1000) {case x => x}
+
+### 通过重用线程获得更好的性能
+每个actor都必须得到自己的线程，这样每个act方法才能有机会运行。切换线程通常需要数百甚至数千条处理器指令。
+react方法：和receive一样，react带一个偏函数,不同的是，react在找到并处理消息后并不返回，它的返回类型是Nothing，它对消息处理器求值，然后就结束了。（react在完成时抛出异常）
+
+由于react方法不需要返回，其实现不需要保留当前线程的调用栈。因此，actor库可以在下一个被唤醒的线程中重用当前的线程。
+如果程序中的每个actor都使用react而不是receive的话，理论上只需要一个线程就能满足程序的全部actor的需要。
+如果计算机有多个处理核心，actor子系统将在可能的情况下使用足够多的线程充分来利用所有核心。
+
+由于react不返回，接受消息的消息处理器现在必须同时处理消息并执行actor所余下的工作。通常的做法是用一个顶级的工作方法--比如act自身---供消息处理器在完成时调用。
+
+    object NameResolver extends Actor {
+        import java.net.{InetAddress, UnKnownHostException}
+
+        def act() {
+            react {
+                case (name : String, actor : Actor) =>
+                    actor ! getIp(name)
+                    act()
+                case "EXIT" => println("Name resolver exiting.")
+                // 这里的偏函数方法体不用加花括号（{}）？
+                case msg =>
+                    println("Unhandled message: " + msg)
+                    act()
+            }
+        }
+
+        def getIp(name : String) : Option[InetAddress] = {
+            try {
+                Some(InetAddress.getByName(name))
+            } catch {
+                case _ : UnKnowHostException => None
+            }
+        }
+    }
+
+    // NameResolver.start()
+    // NameResolver ! ("www.scala-lang.org", self)      // 这里向当前线程发送了一个InetAddress的消息
+    // self.receiveWithin(0) {case x => x}    // res2 : Any = Some(www.scala-lang.org/128.178.154.102)
+
+    // NameResolver ! ("wwwwwww.scala-lang.org", self)
+    // self.receiveWithin(0) {case x => x}  // res4 : Any = None
+
+
+    // Actor.loop函数重复执行一个代码块，哪怕代码调用的是react
+    def act() {
+        loop {
+           react {
+                case (name : String, actor : Actor) =>
+                    actor ! getIp(name)
+                case msg =>
+                    println("Unhandled message: " + msg)
+           }
+        }
+    }
+
+### 良好的actor风格
+
+   * Actor不应阻塞
+
+        val sillyActor2 = actor {
+            def emoteLater() {
+                val mainActor = self
+                actor {
+                    // 助手actor，与主actor一起启动，等待1秒，再发消息给主actor，确保主actor先执行
+                    Thread.sleep(1000)
+                    mainActor ! "Emote"
+                }
+            }
+
+            var emoted = 0
+            emoteLater()
+
+            loop {
+                react {
+                    case "Emote" =>
+                        println("I'm acting!")
+                        emoted += 1
+                        if (emoted < 5)
+                            emoteLater()
+                    case msg =>
+                        println("Received: " + msg)
+                }
+            }
+        }
+
+
+        // sillyActor2 ! "hi there"
+        Received : hi there
+        I'm acting!
+        I'm acting!
+        I'm acting!
+   react的工作原理：
+        当调用一个actor的start时，start方法会以某种方式来确保最终会有某个线程来调用那个actor的act方法。如果act方法调用了react，则react方法会在actor
+        的邮箱中查找传递给偏函数的能够处理的消息。（和receive一样，传递待处理消息给偏函数的isDefinedAt方法）如果找到一个可以处理的消息，react会安排一个在未来某个时间处理读消息
+        的计划并抛出异常。如果它没有找到这样的消息，它会将actor置于冷存储状态，在它通过邮箱收到更多消息时重新激活，并抛出异常。不论哪种情况，react都会以这个异常的方式完成其执行，act方法也
+        随之结束。调用act的线程会捕获这个异常，忘掉这个actor，并继续处理其他事务。需要在偏函数中再次调用act方法，或使用某种其他的手段让react再此被调用。（直接调用act或用loop调用react）
+
+   * 只通过消息与actor通信
+   * 优选不可变消息：每个act方法实际上被局限在一个线程总中，react虽然可能在不同线程，但有足够的同步机制。
+   确保消息对象是线程安全的最佳途径是在消息中只使用不可变对象。任何只有val字段且这些字段只引用到不可变对象的类的实例都是不可变的，一个简单的定义这样的消息类的方式是把它们定义成样本类。
+   如果actor发送的是可变的，未同步的对象作为消息，并在此以后永不读写这个对象，也没问题。但这样未来维护者可能出问题。
+   可以发送给其他的actor一个可变对象的一个副本，如数组是可变的，可以发送arr.clone或arr.toList数据
+   * 让消息自包含
+
+        // 使用样本类代替元组
+        import scala.actors.Actor._
+        import java.net.{InetAddress, UnKnownHostException}
+
+        case class LookupIp(name : String, respondTo : Actor)
+        case class LookupResult(
+            name : String
+            address : Option[InetAddress]
+        )
+
+        object NameResolver2 extends Actor {
+            def act() {
+                loop {
+                    react {
+                        case LookupIp(name, actor) =>
+                            actor ! LookupResult(name, getIp(name))
+                    }
+                }
+            }
+        }
+
+        def getIp(name : String) : Option[InetAddress] = {
+            ...
+        }
+
+## 连结符解析
+C语言解析器：Yacc，Bison
+java语言解析器：ANTLR
+扫描生成器：Lex,Flex或JFlex
+正则语法（regular grammar）
+上下文无关语法（context-free grammar）
+
+    expr ::= term {"+" term | "-" term}.
+    term ::= factor {"*" factor | "/" factor}.
+    factor ::= floatingPointNumber | "(" expr ")".
+
+    // | 表示备选产出，{...}表示重复（0次或多次）。 [...]表示可选项
+
+    import scala.util.parsing.combinator._
+
+    class Arith extends JavaTokenParsers {
+        def expr : Parser[Any] = term~rep("+"~term | "-"~term)
+        def term : Parser[Any] = factor~rep("*"~factor | "/"~factor)
+        def factor : Parser[Any] = floatingPointNumber | "("~expr~")"
+    }
+
+
+从上下文无关语法生成内容：
+  * 每个产出都变成一个方法，因此需要在它前面加上def
+  * 每个方法的结果类型都是Parser[Any]，因此需要将 ::= 符号修改为 : Parser[Any] =
+  * 在语法定义中，顺序的组合是隐含的，但在程序中，它由一个显式的操作符 ~ 表示。因此需要在产出的每两个连续的符号间插入一个 ~。
+  * 重复使用rep(...)表示而不是{...}。可选项使用opt(...)表示而不是[...]
+  * 位于每个产出最后的句点(.)被去掉---也可以写上一个分号（;）
+
+###　运行解析器
+
+    object ParseExpr extends Arith {
+        def main(args : Array[String]) {
+            println("input : " + args(0))
+            println(parseAll(expr, args(0)))
+        }
+    }
+
+    // scala ParseExpr "2 * (3 + 7)"
+    // [1.12] parsed : ((2~List(....   表示解析到第一行的第12列
+    // scala ParseExpr "2 * (3 + 7))"
+    // [1.12] failure:
+
+### 基本的正则表达式解析器
+
+    object MyParsers extends RegexParsers {
+        val ident : Parser[String] = """[a-ZA-Z_]\w*""".r
+    }
+
+### JSON
+
+    value ::= obj | arr | stringLiteral | floatingPointNumber | "null" | "true" | "false".
+    obj ::= "{" [members] "}".
+    arr ::= "[" [values] "]".
+    members ::= member {"," member}.
+    member ::= stringLiteral ":" value.
+    value ::= value {"," value}.
+
+    import scala.util.parsing.combinator._
+    class JSON extends JavaTokenParsers {
+        def value : Parser[Any] = obj | arr | stringLiteral | floatingPointNumber | "null" | "true" | "false"
+        // repsep(member, ",")解析的是一个逗号分割的member词的序列
+        def obj : Parser[Any] = "{"~repsep(member, ",")~"}"
+        def arr : Parser[Any] = "["~repsep(value, ",")~"]"
+        def member : Parser[Any] = stringLiteral~":"~value
+    }
+
+    import java.io.FileReader
+    object ParseJSON extends JSON {
+        def main(args : Array[String]) {
+            val reader = new FileReader(args(0))
+            println(parseAll(value, reader)
+        }
+    }
+
+### 解析器输出
+
+   * 每个写作字符串的解析器(如：“{” 或“:” 或"null")返回解析的字符串本身
+   * 正则表达式解析器，如"""[a-zA-Z_]\w*""".r也返回解析后的字符串本身。同样的规则适用于诸如stringLiteral或floatPointNumber等的正则表达式解析器，它们
+   继承自JavaTokenParsers特质
+   * 顺序组合P~Q返回P和Q两个结果。这些结果通过同样写作~的样本类实例中返回。因此如果P返回“true”而Q返回“?”，那么顺序组合P~Q返回~("true", "?"),打印为(true~?)
+   * 备选组合P | Q 返回P或者Q的成功结果
+   * 重复项rep(P)或repsep(P, separator)返回所有P的运行结果的列表。
+   * 可选项opt(P)返回一个scala的Option类型的实例。如果P成功得到结果R，它就返回Some(R)，如果失败，则返回None
+
+解析器连结符：^^
+^^操作符对解析器的结果进行转型。使用这个操作符的表达式的格式为P ^^ f，其中P是解析器而f是函数。P ^^ f解析的句子和P没什么两样。只要P返回某个结果R，P ^^ f的结果就是f(R)
+
+   floatingPointNumber ^^ (_.toDouble)
+   "true" ^^ (x => true)
+
+    // "{"~ms~"}"就相当于 ~(~("{", ms), "}")
+   def obj : Parser(Map[String, Any]) =
+        "{"~repsep(member, ",")~"}"  ^^ {case "{"~ms~"}" => Map() ++ ms}
+
+   // ~操作符产出的结果是同样名为~的样本类实例。以下是Parsers特质的内部类
+   case class ~[+A, +B] (x ; A, y : B) {
+        override def toString() = "(" + x + "~" + y + ")"
+   }
+
+~>和<~解析器连结符：这两个连结符都表示和~一样的顺序组合，不过~>只保留它右操作元的结果，<~只保留它左操作元的结果。
+
+    def obj : Parser[Map[String, Any]] =
+        "{"~> repsep(member, ",")  <~"}"  ^^ (Map() ++ _)
+
+~, ^^和|的优先级是从左到右递减的。
+
+    import scala.util.parsing.combinator._
+
+    class JSON1 extends JavaTokeParsers {
+        def obj : Parser[Map[String, Any]] =
+            "{"~>repsep(member, ",") <~"}" ^^ (Map() ++ _)
+        def arr : Parser[List[Any]] =
+            "["~>repsep(value, ",") <~"]"
+        def member : Parser[(String, Any)] =
+            stringLiteral~":"~value ^^ {case name~":"~value => (name, value)}
+        // 这里如果是以中缀结尾的话，就不需要加上括号
+        def value : Parser[Any] = (
+                obj
+            |   arr
+            |   stringLiteral
+            |   floatingPointNumber ^^ (_.toDouble)
+            |   "null" ^^ (x => null)
+            |   "true"   ^^ (x => true)
+            |   "false"  ^^ (x => false)
+        )
+    }
+
+解析器连结符汇总：
+"..."               字面量
+"...".r             正则表达式
+P~Q                 顺序组合
+P<~Q, P~>Q          顺序组合，只保留左或右
+P|Q                 备选项
+opt(P)              可选项
+rep(P)              重复项
+repsep(P, Q)        交错在一起的重复项
+P ^^ f              结果转换
+
+
+scala假定任何从句法上是独立语句的两行之间都有一个分号，除非第一行以中缀结尾，或者两行被括在括弧或方括号中。
+
+    // 在这种情况下，就不需要在value解析器主体之外加上括弧了。
+    def value : Parser[Any] =
+        obj |
+        arr |
+        stringLiteral |
+
+    def value : Parser[Any] =
+            obj    // 这里由于不是括在括弧或方括号中，也不是以中缀结尾，所以编译器默认会加上分号(;)
+         |  arr
+
+
+在符号名称与由字母和数字组成的名称之间进行选择
+
+   * 在符号名称已经具备普遍含义的情况下使用符号名称。如用+，而不用add
+   * 否则，如果想要让代码对普通读者而言更易于理解，则优选由字母和数字组成的名称
+   * 仍然可以为特定领域的库选用符号名称，如果这样明显更可读，且并不指望那些不具备该领域扎实基础的普通读者能够立即理解这些代码的话。
+
+连结符解析框架
+
+    package scala.util.parsing.combinator
+    trait Parsers {
+        //...
+    }
+
+解析器定义：
+
+    type Parser[T] = Input => ParseResult[T]
+
+解析器输入：
+
+    type Input = Reader[Elem]
+    type Elem
+
+解析器结果
+
+    sealed abstract class ParseResult[+T]
+    // 解析器分析输入流的某个部分，然后在结果中返回剩余的部分
+    case class Success[T](result : T, in : Input) extends ParseResult[T]
+    case class Failure(msg : String, in : Input) extends ParseResult[Nothing]  、
+
+给this起别名
+
+    abstract class Parser[+T] extends (Input => ParseResult[T]) {
+        p =>
+        //
+        def apply(in : Input) : ParseResult[T]
+        def ~ ...
+        df |  ...
+    }
+诸如 id =>  这样紧跟在类模板起始花括号之后的语句将标识符id在类中定义为this的别名。可以使用id.m或this.m来访问类的对象级私有成员m，这两种写法完全等同。
+
+    class Outer { outer =>
+        class Inner {
+            println(Outer.this eq outer)  // 打印：true，都指向外部类的对象
+        }
+
+### 单语言符号解析器
+Parsers类定义的通用解析器elem可以被用来解析任何单个语言符号：
+
+    def elem(kind : String, p : Elem => Boolean) =
+        new Parser[Elem] {
+            def apply(in Input) =
+                if (p(in.first)) Success(in.first, in.rest)
+                else Failure(kind + " excepted", in)
+        }
+
+### 顺序组合
+~连结符
+Scala总是将二元的类型操作如A op B解析为参数化的类型op[A, B]。二元模式P op Q同样被解释为一个函数应用op(P, Q)
+
+    abstract class Parser[+T] .. {p =>
+        // 这里T~U是一个更可读的参数化类型~[T, U]的简写。
+        def ~ [U] (q : => Parser[U]) = new Parser[T~U] {
+            def apply(in : Input) = p(in) match {
+                case Success(x, in1) =>
+                    q(in1) match {
+                        case Success(y, in2) => Success(new ~(x, y), in2)
+                        case Failure => failure
+                    }
+                case Failure => failure
+            }
+        }
+
+        def <~ [U](q : => Parser[U]) : Parser[T] =
+            (p~q) ^^ {case x~y => x}
+        def ~> [U](q : => Parser[U]) : Parser[T] =
+            (p~q) ^^ {case x~y => y}
+
+###　备选组合
+P | Q：如果P成功，则整个解析器成功并返回P的结果，否则则在于P相同的输入上尝试Q，Q的结果就是整个解析器的结果
+
+    def | (q : Parser[T]) = new Parser[T] {
+        def apply(in : Input) = p(in) match {
+            case s1 @ Success(_, _) => s1
+            case failure => q(in)
+        }
+    }
+### 处理递归
+
+    // ~和|的参数q是传名的，如果是传值的，则这个定义读不到任何信息，且会立即造成栈溢出
+    def parens = floatingPointNumber | "("~parens~")"
+
+### 结果转换
+P ^^ f
+
+    def ^^[U] (f : T => U) : Parser[U] = new Parser[U] {
+        def apply(in : Input) = p(in) match {
+            case Success(x, in1) => Success(f(x), in1)
+            case failure => failure
+        }
+    }
+
+### 不读取任何输入的解析器
+
+    def success[T](v : T) = new Parser[T]{
+        def apply(in : Input) = Success(v, in)
+    }
+
+    def failure(msg : String) = new Parser[Nothing] {
+        def apply(in : Input) = Failure(msg, in)
+    }
+
+### 可选项和重复项
+
+    // 在Parsers特质中
+    def opt[T](p : => Parser[T]) : Parser[Option[T]] = (
+            p ^^ Some(_)
+        |   success(None)
+    )
+
+    def rep[T](p : Parser[T]) : Parser[List[T]] = (
+            p~rep(p) ^^ {case x~xs => x :: xs}
+         |  success(List())
+    )
+
+    def repsep[T, U](p : Parser[T]. q : Parser[U])) : Parser[List[T]] = (
+            p~rep(q ~>p) ^^ {case r~rs => r :: rs}
+         |  success(List())
+    )
+
+### 字符串字面量和正则表达式
+
+    // "("~expr~")" 自动扩展为literal("(")~expr~literal(")")
+    implicit def literal(s : String) : Parser[String]
+    implicit def regex(r : Regex) : Parser[String]
+
+RegexPatters特质同时还处理掉了符号间的空白，如果需要空白，可以重写protected val whiteSpace = """\s+""".r
+
+### 词法分析和解析
+词法分析通常分为两个阶段：词法分析器（lexer）阶段识别出输入中的每个单词并将它们归类为不同的语言符号类别，这个阶段也被称为词法分析。
+在这之后是句法分析，分析语言符号的序列。句法分析有时也被称为解析
+
+词法和句法分析的工具：
+scala.util.parsing.combinator.lexical
+scala.util.parsing.combinator.syntactical
+
+### 错误报告
+
+scala解析库实现了一个简单的启发式算法：在所有失败当中，选择出现在输入最后未知的那一个，解析器选取仍然合法的最长的前缀，然后发出一个错误消息，描述
+为什么对这个前缀的解析不能再走得更远了。如果在最后这个位置存在多个失败点，则选择最后被访问到的那一个。
+
+    def value : Parser[Any] = obj | arr | stringLiteral | floatingPointNumber | "null" |
+        "true" | "false" | failure("Illegal start of value")
+
+### 回溯 LL(1)
+解析器连结符在选择不同的解析器时采用回溯的方式。在表达式P | Q中，如果P失败了，则Q会运行与P相同的输入。哪怕P在失败之前已经解析出了某些语言符号也是如此。
+这样同样的语言符号会再次被Q解析。
+
+回溯只对如此公式化语法定义增加了少量限制，以便它能被解析。本质上讲，只需要避免左递归的产出
+
+    expr ::= expr "+" term | term.
+总是会失败，因为expr立即调用了自身因此不会继续往前。回溯也会带来巨大的消耗，因为同样的输入可能被解析多次
+
+    expr ::= term "+" expr | term.
+如果expr解析器应用到诸如(1 + 2) * 3，首先会尝试第一个选择，当匹配到+符号会失败。然后第2个成功了。这个词句被解析了2次。
+
+通常可以改变语法定义来避免回溯
+
+    expr ::= term ["+" expr].
+    expr ::= term {"+" expr}.
+
+可以用~!显式地指定某个语法定义是LL(1)的。这个操作符就像顺序组合~，不过永远不会回溯到未读但已经被解析过的输入元素上。
+
+LARLR解析算法
+
+解析器优化：
+解析器不再表示为从输入到解析结果的函数，而是表示为一棵树，每个构建步骤都表示为样本类，举例来说，顺序组合可以用样本类Seq表示，备选项可以用Alt表示，等等
+最外面的解析器方法phase可以将解析器的这个符号表示用标准的解析器生成算法，进而转换成高效的解析表。
+
+
+## GUI编程
+import scala.swing._
+
+    import scala.swing._
+
+    object FirstSwingApp extends SimpleGUIApplication {
+        def top = new MainFrame {
+            // 调用title_=方法，由父类var title定义的
+            title = "First Swing App"
+            // 调用contents_=方法，由父类var contents定义的
+            contents = new Button {
+                text = "Click me"
+            }
+        }
+    }
+
+
+    object SecondSwingApp extends SimpleSwingApplication {
+
+      def top = new MainFrame {
+        title = "Second Swing App"
+        val button = new Button {
+          text = "Click me"
+        }
+
+        val label = new Label {
+          text = "No button clicks registered"
+        }
+
+        contents = new BoxPanel(Orientation.Vertical) {
+          contents += button
+          contents += label
+          border = Swing.EmptyBorder(30, 30, 10, 30)
+        }
+      }
+    }
+
+### 处理事件
+
+在scala中。订阅一个事件源source的方法是调用listenTo(source)，从一个事件源取消订阅的方法deafTo(source)
+
+    object ReactiveSwingApp extends SimpleSwingApplication {
+
+      def top = new MainFrame {
+        title = "Reactive Swing App"
+        val button = new Button {
+          text = "Click me"
+        }
+
+        val label = new Label {
+          text = "No button clicks registered~"
+        }
+
+        contents = new BoxPanel(Orientation.Vertical) {
+          contents += button
+          contents += label
+          border = Swing.EmptyBorder(30, 30, 10, 30)
+        }
+
+        listenTo(button)
+        var nclicks = 0
+        reactions += {
+          case ButtonClicked(b) =>
+            nclicks += 1
+            label.text = "Number of button clicks: " + nclicks
+        }
+      }
+
+
+import swing._
+import event._
+与下面的等价，因为包在scala中是嵌套的。
+import scala.swing._
+import scala.swing.event._
+
+        import swing._
+        import event._
+
+        object TempConverter extends SimpleSwingApplication {
+
+          def top = new MainFrame {
+            title = "Celsius/Fahrenheit Converter"
+            object celsius extends TextField {columns = 5}
+            object fahrenheit extends TextField {columns = 5}
+
+            // FlowPanel表示根据框架的宽度用一行或多行一个接一个地显示所有元素
+            contents = new FlowPanel {
+              contents += celsius
+              contents += new Label(" Celsius = ")
+              contents += fahrenheit
+              contents += new Label(" Fahrenheit")
+              border = Swing.EmptyBorder(15, 10, 10, 10)
+            }
+
+            listenTo(celsius, fahrenheit)
+            reactions += {
+                // 这里用反引号表示某个常量，如果不用的话，会便是成一个变量
+                // 如果控件定义成Fahrenheit，以大写开头，则表示常量，不需要加反引号。这就是变量用大写开头的原因，表示会在偏函数的case中用到
+              case EditDone(`fahrenheit`) =>
+                val f = fahrenheit.text.toInt
+                val c = (f - 32) * 5/ 9
+                celsius.text = c.toString
+              case EditDone(`celsius`) =>
+                val c = celsius.text.toInt
+                val f = c * 9 / 5 + 32
+                fahrenheit.text = f.toString
+            }
+          }
+        }
+
+
+可以用this(a, b)来调用本身类的apply方法
+
+
+## scala脚本
+
+#! /bin/sh
+exec scala "$0" "$@"
+!#
+println("Hello, " + args(0) + "!")
+
+windows
+::#!
+@echo off
+call scala %0 %*
+goto :eof
+::!#
+
+
+     class M {
+        {
+            case Some(x) => x
+            case None => 0
+        }
+     }
+
+
+     会生成一个匿名内部类M$$anonfun$1，这个匿名内部类的构造方法有一个参数就是M，传M传入这个匿名类中。
+     这个匿名类继承 scala.runtime.AbstractFunction1<scala.Option<java.lang.Object>, java.lang.Object>
+     因此这个匿名类有一个apply方法，接收一个参数scala.Option<java.lang.Object>
+
+    class M {
+        val a : PartialFunction[Option[Int], Int] = {
+            case Some(x) => x
+            case None => 0
+        }
+    }
+    // 生成的匿名类 M$$anonfun$1继承scala.runtime.AbstractPartialFunction$mcIL$sp<scala.Option<java.lang.Object>>
+    // 有applyOrElse和isDefinedAt方法
 
 
 
+
+    class M {
+      val withDefault : PartialFunction[Option[Int], Int] = {
+            case Some(x) => x
+            case None => 0
+        }
+    }
+    生成如下java代码
+    public class M {
+      private final scala.PartialFunction<scala.Option<java.lang.Object>, java.lang.Object> withDefault;
+
+      public scala.PartialFunction<scala.Option<java.lang.Object>, java.lang.Object> withDefault();
+        Code:
+           0: aload_0
+           1: getfield      #14                 // Field withDefault:Lscala/PartialFunction;
+           4: areturn
+
+      public M();
+        Code:
+           0: aload_0
+           1: invokespecial #20                 // Method java/lang/Object."<init>":()V
+           4: aload_0
+           5: new           #22                 // class M$$anonfun$1
+           8: dup
+           9: aload_0
+          10: invokespecial #25                 // Method M$$anonfun$1."<init>":(LM;)V
+          13: putfield      #14                 // Field withDefault:Lscala/PartialFunction;
+          16: return
+    }
+
+    public final class M$$anonfun$1 extends scala.runtime.AbstractPartialFunction$mcIL$sp<scala.Option<java.lang.Object>> implements scala.Serializable {
+      public static final long serialVersionUID;
+
+      public final <A1 extends scala/Option<java/lang/Object>, B1 extends java/lang/Object> B1 applyOrElse(A1, scala.Function1<A1, B1>);
+        Code:
+           0: aload_1
+           1: astore_3
+           2: aload_3
+           3: instanceof    #21                 // class scala/Some
+           6: ifeq          35
+           9: aload_3
+          10: checkcast     #21                 // class scala/Some
+          13: astore        4
+          15: aload         4
+          17: invokevirtual #25                 // Method scala/Some.x:()Ljava/lang/Object;
+          20: invokestatic  #31                 // Method scala/runtime/BoxesRunTime.unboxToInt:(Ljava/lang/Object;)I
+          23: istore        5
+          25: iload         5
+          27: invokestatic  #35                 // Method scala/runtime/BoxesRunTime.boxToInteger:(I)Ljava/lang/Integer;
+          30: astore        6
+          32: goto          80
+          35: getstatic     #41                 // Field scala/None$.MODULE$:Lscala/None$;
+          38: aload_3
+          39: astore        7
+          41: dup
+          42: ifnonnull     54
+          45: pop
+          46: aload         7
+          48: ifnull        62
+          51: goto          71
+          54: aload         7
+          56: invokevirtual #47                 // Method java/lang/Object.equals:(Ljava/lang/Object;)Z
+          59: ifeq          71
+          62: iconst_0
+          63: invokestatic  #35                 // Method scala/runtime/BoxesRunTime.boxToInteger:(I)Ljava/lang/Integer;
+          66: astore        6
+          68: goto          80
+          71: aload_2
+          72: aload_1
+          73: invokeinterface #53,  2           // InterfaceMethod scala/Function1.apply:(Ljava/lang/Object;)Ljava/lang/Object;
+          78: astore        6
+          80: aload         6
+          82: areturn
+
+      public final boolean isDefinedAt(scala.Option<java.lang.Object>);
+        Code:
+           0: aload_1
+           1: astore_2
+           2: aload_2
+           3: instanceof    #21                 // class scala/Some
+           6: ifeq          14
+           9: iconst_1
+          10: istore_3
+          11: goto          48
+          14: getstatic     #41                 // Field scala/None$.MODULE$:Lscala/None$;
+          17: aload_2
+          18: astore        4
+          20: dup
+          21: ifnonnull     33
+          24: pop
+          25: aload         4
+          27: ifnull        41
+          30: goto          46
+          33: aload         4
+          35: invokevirtual #47                 // Method java/lang/Object.equals:(Ljava/lang/Object;)Z
+          38: ifeq          46
+          41: iconst_1
+          42: istore_3
+          43: goto          48
+          46: iconst_0
+          47: istore_3
+          48: iload_3
+          49: ireturn
+
+      public final boolean isDefinedAt(java.lang.Object);
+        Code:
+           0: aload_0
+           1: aload_1
+           2: checkcast     #62                 // class scala/Option
+           5: invokevirtual #66                 // Method isDefinedAt:(Lscala/Option;)Z
+           8: ireturn
+
+      public final java.lang.Object applyOrElse(java.lang.Object, scala.Function1);
+        Code:
+           0: aload_0
+           1: aload_1
+           2: checkcast     #62                 // class scala/Option
+           5: aload_2
+           6: invokevirtual #70                 // Method applyOrElse:(Lscala/Option;Lscala/Function1;)Ljava/lang/Object;
+           9: areturn
+
+      public M$$anonfun$1(M);
+        Code:
+           0: aload_0
+           1: invokespecial #72                 // Method scala/runtime/AbstractPartialFunction$mcIL$sp."<init>":()V
+           4: return
+    }
 
