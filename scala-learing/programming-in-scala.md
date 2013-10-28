@@ -4243,9 +4243,189 @@ scala里的抽取器是具有名为unapply成员方法的对象，通常抽取�
     Some(user, domain)
 
 ### 0或1个变量的模式
+unapply方法在匹配成功的情况下返回了一对元素值，要绑定N个变量，unapply应该返回N元的元组，并包括在Some中。
+
+在模式仅绑定一个变量时，scala中没有一元的元组，要返回唯一的模式元素，unapply方法会简单地把他包装在Some中。
+
+    object Twice {
+        def apply(s : String) = s + s
+        def unapply(s : String) : Option[String] = {
+            val length = s.length / 2
+            val half = s.substring(0, length)
+            if (half = s.substring(length)) Some(half) else None
+        }
+    }
+
+在抽取器不绑定任何变量的时候，unapply方法返回布尔值---true或false说明匹配成功或失败。
+
+    // 这里定义apply没有意义
+    object UpperCase {
+        def unapply(s : String) : Boolean = s.toUpperCase == s
+    }
+
+    def userTwiceUpper(s : String) = s match {
+        // 这里的UpperCase()的括号不能省略，否则会执行与UpperCase对象的匹配检查
+        // 这里使用变量绑定的标准方案，以x @ UpperCase()的形式把变量x与UpperCase()匹配的模式联系起来
+        case EMail(Twice(x @ UpperCase()), domain) =>
+            "match: " + x + " in domain " + domain
+        case _ => "no match"
+    }
+
+### 变参抽取器
+
+    dom match {
+        case Domain("org", "acm") => println("acm.org")
+        case Domain("com", "sun", "java") => println("java.sun.com")
+        // 这里_*匹配序列中所有剩下的元素
+        case Domain("net", _*) => println("a .net domain")
+    }
+
+scala允许定义特别为变参匹配准备的不同抽取方法，被称为unapplySeq
+
+    // Domain的实现
+    object Domain {
+        // 注入方法（可选）
+        def apply(parts : String*) : String = parts.reverse.mkString(".")
+        // 抽取方法（必须）
+        // unapplySeq的结果类型必须与Option[Seq[T]]一致，这里的元素类型T不能限制
+        def unapplySeq(whole : String) : Option[Seq[String]] =
+            Some(whole.split("\\.*").reverse)
+    }
+
+    def isTomInDotCom(s : String) : Boolean = s match {
+        case EMail("tom", Domain("com", _*)) => true
+        case _ => false
+    }
+
+    object ExpandedEMai : {
+        def unapplySeq(email : String) : Option[(String, Seq[String])] = {
+            val parts = email split "@"
+            if (parts.length == 2) {
+                Some(parts(0), parts(1).split("\\.").reverse)
+            } else
+                None
+        }
+    }
+
+    val s = "tom@support.epfl.ch"
+    val ExpandedEMail(name, topdom, subdoms @ _*) = s
+    // name : String = tom
+    // topdom : String = ch
+    // subdoms : Seq[String] = List(epfl, support)
+
+### 抽取器和序列模式
+可以使用序列模式访问列表或数组的元素：
+
+    List()
+    List(x, y, _*)
+    Array(x, 0, 0, _)
+这些序列模式都是使用标准scala库的抽取器实现的：List和Array对象有apply和unapplySeq方法
+
+    object List extends SeqFactory[List]
+
+    abstract class SeqFactory[CC[X] <: Seq[X] with GenericTraversableTemplate[X, CC]]
+    extends GenSeqFactory[CC] with TraversableFactory[CC] {
+
+      /** This method is called in a pattern match { case Seq(...) => }.
+       *
+       *  @param x the selector value
+       *  @return  sequence wrapped in an option, if this is a Seq, otherwise none
+       */
+       // 这里Some[[CC[A]]]是Option[Seq[T]]的子类，所以符合unapplySeq方法的要求
+      def unapplySeq[A](x: CC[A]): Some[CC[A]] = Some(x)
+
+    }
+
+    object Array extends FallbackArrayBuilding {
+        def unapplySeq[T](x: Array[T]): Option[IndexedSeq[T]] =
+                if (x == null) None else Some(x.toIndexedSeq)
+    }
 
 
+### 抽取器VS样本类
+样本类暴露了数据的具体表达方式，这是指构造器模式中的类名与选择器对象的具体表达类型是一致的。如果匹配case C(...)成功，那么就知道了选择器表达式实际就是C类的实例。
+抽取器截断了数据表达与模式之间的联系，它们可以让模式与被选择对象的数据类型之间毫无关系。这种属性被称为表征独立(representation independence)，在大型开发系统中，表征独立是非常重要的，
+因为这可以让修改部件的实现类型不会影响部件的使用者。
+
+如果部件已经定义被导出了一套样本类的话，就必须始终使用它们，因为客户代码可能已经包含了对这些样本类的模式匹配，重命名某些样本类或修改类层级都将影响客户代码。但抽取器不会出现类似的问题，
+因为它们代表了数据表现和客户观察方式之间的间接适配层，仍然可以修改类型的具体实现，只要对抽取器做更新即可。
+
+样本类有优于抽取器的地方：
+   * 样本类更易于建立和定义，需要更少的代码，
+   * 它们能实现比抽取器更为高效的模式匹配,scala编译器对于样本类模式的优化远胜于对抽取器模式的优化。这是由于样本类的机制是固定的，但抽取器的unapply或unapplySeq方法几乎能做任何事情
+   * 如果样本类继承自sealed基类，那么scala编译器将采用穷举法检查模式匹配并在模式没有覆盖某种可能的组合情况下报错，抽取器没有这种穷举检查。
+
+一般以样本类开始，如果有新需求，可以改为抽取器，如果编写的代码是封闭的应用，可以用样本类，如果要修改类层级，应用程序需要重构，或把类型暴露给未知的客户，则用抽取器。
+
+### 正则表达式
+
+    import scala.util.matching.Regex
+    val Decimal = new Regex("(-)?(\\d+)(\\.\\d*)?")
+
+原始字符串是夹在三引号(""")之间的字符序列，原始字符串的所有字符都与输入完全一致，包括反斜杠在内，也不被当做转义符处理。
+
+    val Decimal = new Regex("""(-)?(\d+)(\.\d*)?""")
+    // 在字符串后面添加.r即可获得正则表达式，RichString包含了名为r的方法，它把字符串转为正则表达式
+    val Decimal = """(-)?(\d+)(\.\d*)?""".r
+
+### 用正则表达式做查找
+
+    regex findFirstIn str
+    regex findAllIn str
+    regex findPrefixOf str
+
+### 用正则表达式抽取值
+scala中所有的正则表达式都定义了抽取器，可以用来鉴别匹配于正则表达式分组的字符串。
+
+    // Decimal表达式值定义了unapplySeq方法，这个方法把每个字符串同数值的正则表达式语法做匹配，如果有一个分组缺失，则元素值被设为null
+    val Decimal(sign, integerpart, decimalpart) = "-1.23"
+    // sign : String = -
+    // integerpart : String = 1
+    // decimalpart : String = .23
 
 
+    val Decimal(sign, integerpart, decimalpart) = "1.0"
+    // sign : String = null
+    // integerpart : String = 1
+    // decimalpart : String = .0
 
+还可以在for表达式中混用抽取器和正则表达式做搜索。
+
+    for (Decimal(s, i, d) <- Decimal findAllIn input) println("sign: " + s + ", integer: " + i + ", decimal: " + d)
+
+## 注解
+注解可以出现在任何地方并附加到任意变量，方法，表达式或其他程序元素上。
+
+### 注解语法：
+
+    @deprecated def bigMistake() = //...
+注解可以用在任何类的声明或定义之上，包括val, var, def, class, object, trait, type。并应用于跟随其后的声明或定义的整体。
+注解可以应用于表达式，这需要在表达式之后加上冒号（:）,然后写上注解内容。
+
+    // 注解好像被当作类型一样
+    (e : @unchecked) match {
+        //
+    }
+
+注解可以放在类型上。
+注解的一般形式：
+
+    // annot是注解的类，所有的注解都必须包含
+    // expr是注解的参数，@deprecated注解不需要任何参数，通常可以省略括号，也可以写成@deprecated()
+    @annot(expr1, expr2, ...) {val name1=const1, ... val namen = constn}
+
+    // 注解的类型支持任意的表达式
+    @cool val normal = "Hello"
+    @coolerThan(normal) val fonzy = "Heeyyy"
+
+### 标准注解
+@deprecated
+@volatile：它可以通知编译器相关变量将被多个线程使用，实现这样的变量会使得它在读和写上变慢，但多线程的访问将表现得更具可预见性。在java中，与java写volatile修饰符行为一致。
+
+@serializable：指明类究竟是否可以序列化。多数类可以序列化，但并非全部，例如，socket或GUI窗口句柄不能被序列化。默认情况下，类被认为是不可序列化的。
+@SerialVersionUID(1234)：应该把这个数存在产生的字节流中，当后来重载字节流并尝试把它转换为对象时，可以检查当前的类版本与字节流的版本是否有相同的版本号。
+如果想要对类做对于序列化不能相兼容的改变的话，可以修改版本号，框架将自动拒绝加载类的旧实例。
+@transient：框架不应该在序列化该字段所在的对象时执行序列化这个字段。在对象被加载的时候，注解为@transient的字段也将根据其类型恢复为默认值。
+@scala.reflect.BeanProperty：如果把这个注解加到字段上，编译器就会自动产生get和set方法，产生的get和set方法只在完成编译后才可用，因为，不能在同一时间编译的代码中调用注解字段的这些get，set方法。
+@unchecked：由编译器在模式匹配的时候解释，告诉编译器不要担心match表达式忽略了某些情况。
 
